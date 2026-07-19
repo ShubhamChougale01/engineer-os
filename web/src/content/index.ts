@@ -92,6 +92,15 @@ const REGISTRY: Record<string, () => Promise<{ default: SkillContent }>> = {
   "message-queues": () => import("./skills/message-queues"),
   kafka: () => import("./skills/kafka"),
   rabbitmq: () => import("./skills/rabbitmq"),
+  "machine-learning": () => import("./skills/machine-learning"),
+  "deep-learning": () => import("./skills/deep-learning"),
+  "neural-networks": () => import("./skills/neural-networks"),
+  cnn: () => import("./skills/cnn"),
+  rnn: () => import("./skills/rnn"),
+  transformers: () => import("./skills/transformers"),
+  attention: () => import("./skills/attention"),
+  embeddings: () => import("./skills/embeddings"),
+  "vector-search": () => import("./skills/vector-search"),
 };
 
 export const hasContent = (slug: string): boolean => slug in REGISTRY;

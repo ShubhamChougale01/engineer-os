@@ -88,6 +88,15 @@ const REGISTRY: Record<string, () => Promise<{ default: CheatSheetData }>> = {
   "message-queues": () => import("./message-queues"),
   kafka: () => import("./kafka"),
   rabbitmq: () => import("./rabbitmq"),
+  "machine-learning": () => import("./machine-learning"),
+  "deep-learning": () => import("./deep-learning"),
+  "neural-networks": () => import("./neural-networks"),
+  cnn: () => import("./cnn"),
+  rnn: () => import("./rnn"),
+  transformers: () => import("./transformers"),
+  attention: () => import("./attention"),
+  embeddings: () => import("./embeddings"),
+  "vector-search": () => import("./vector-search"),
 };
 
 export const hasCheatSheet = (slug: string): boolean => slug in REGISTRY;
