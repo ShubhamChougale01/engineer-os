@@ -1,0 +1,100 @@
+import type { CheatSheetData } from "./types";
+
+const azure: CheatSheetData = {
+  title: "The Ultimate Azure Cheat Sheet",
+  subtitle: "Resource hierarchy · core services · identity · networking · production toolbelt",
+  sections: [
+    {
+      title: "Hierarchy & CLI Basics",
+      color: "violet",
+      rows: [
+        { term: "Tenant", desc: "The Microsoft Entra ID directory — your organization's identity boundary", code: "az account tenant list" },
+        { term: "Management Group", desc: "Groups subscriptions for policy/RBAC that cascades down", code: "az account management-group list" },
+        { term: "Subscription", desc: "Billing + quota + hard isolation boundary — the AWS 'account' equivalent", code: "az account list --output table\naz account set --subscription 'My Sub'" },
+        { term: "Resource Group", desc: "Logical, lifecycle-based container of related resources", code: "az group create --name rg-demo --location eastus\naz group delete --name rg-demo --yes --no-wait" },
+        { term: "az login / az account show", desc: "Authenticate and check active context", code: "az login\naz account show --output table" },
+        { term: "az resource list", desc: "List everything in a resource group", code: "az resource list --resource-group rg-demo --output table" },
+        { term: "Naming convention", desc: "type-workload-env-region, e.g. app-orders-api-prod-eastus", code: "rg-orders-prod-eastus\npg-orders-prod-eastus" },
+        { term: "az deployment group what-if", desc: "Preview exact changes before applying IaC", code: "az deployment group what-if \\\n  --resource-group rg-demo --template-file main.bicep" },
+        { term: "Regions & Availability Zones", desc: "Region = set of datacenters; AZ = physically separate DC within a region", code: "az account list-locations --output table" },
+        { term: "Tags", desc: "Mandatory metadata for cost + ownership tracking", code: "az resource tag --tags env=prod owner=team-x \\\n  --ids <resource-id>" },
+      ],
+    },
+    {
+      title: "Compute",
+      color: "blue",
+      rows: [
+        { term: "Virtual Machines", desc: "IaaS — full OS control, most operational burden", code: "az vm create --resource-group rg1 --name vm1 \\\n  --image Ubuntu2204 --size Standard_B2s \\\n  --admin-username azureuser --generate-ssh-keys" },
+        { term: "App Service", desc: "PaaS web hosting — TLS, custom domains, slots built in", code: "az appservice plan create --name plan1 --sku B1 --is-linux\naz webapp create --name app1 --plan plan1 \\\n  --runtime 'PYTHON:3.12'" },
+        { term: "Azure Functions", desc: "Event-driven serverless — Consumption plan scales to zero", code: "az functionapp create --name func1 \\\n  --consumption-plan-location eastus \\\n  --runtime python --storage-account st1" },
+        { term: "Container Apps", desc: "Serverless containers — middle ground between Functions and AKS", code: "az containerapp create --name app1 \\\n  --environment env1 --image myimg:latest \\\n  --min-replicas 1 --max-replicas 10" },
+        { term: "AKS", desc: "Managed Kubernetes control plane; you pay for worker nodes only", code: "az aks create --resource-group rg1 --name aks1 \\\n  --node-count 3 --enable-managed-identity \\\n  --network-plugin azure\naz aks get-credentials --resource-group rg1 --name aks1" },
+        { term: "Container Instances (ACI)", desc: "Single container, no orchestration — fastest way to run one container", code: "az container create --resource-group rg1 --name c1 \\\n  --image myimg:latest --cpu 1 --memory 1" },
+        { term: "Deployment slots", desc: "App Service zero-downtime blue/green swap", code: "az webapp deployment slot create --name app1 --slot staging\naz webapp deployment slot swap --name app1 \\\n  --slot staging --target-slot production" },
+        { term: "Serverless vs containers vs VMs", desc: "Pick by control-vs-burden tradeoff", code: "Functions: least burden, scale-to-zero\nContainer Apps/AKS: full control, more ops\nVMs: max control, max burden" },
+      ],
+    },
+    {
+      title: "Storage & Databases",
+      color: "emerald",
+      rows: [
+        { term: "Blob Storage", desc: "Object storage — the AWS S3 equivalent", code: "az storage account create --name st1 --sku Standard_LRS\naz storage container create --account-name st1 \\\n  --name uploads --public-access off --auth-mode login" },
+        { term: "Azure Files", desc: "Managed SMB/NFS file shares — mountable like a network drive", code: "az storage share-rm create --storage-account st1 --name share1" },
+        { term: "Managed Disks", desc: "VM block storage — the AWS EBS equivalent", code: "az disk create --resource-group rg1 --name disk1 \\\n  --size-gb 128 --sku Premium_LRS" },
+        { term: "Azure SQL Database", desc: "Managed SQL Server — best when you already have T-SQL code", code: "az sql server create --name sql1 --admin-user admin \\\n  --admin-password '...'\naz sql db create --server sql1 --name orders" },
+        { term: "Cosmos DB", desc: "Globally distributed, multi-model, tunable consistency", code: "az cosmosdb create --name cosmos1 \\\n  --default-consistency-level Session" },
+        { term: "PostgreSQL Flexible Server", desc: "Managed open-source relational DB — no public access in prod", code: "az postgres flexible-server create --name pg1 \\\n  --sku-name Standard_B2s --tier Burstable \\\n  --public-access None" },
+        { term: "Azure Cache for Redis", desc: "Managed cache — session/state store for horizontal scaling", code: "az redis create --name redis1 --sku Basic --vm-size c0" },
+        { term: "Cosmos DB consistency levels", desc: "Strong, Bounded Staleness, Session (default choice), Consistent Prefix, Eventual", code: "Session = read-your-own-writes\nwithout full strong-consistency latency" },
+      ],
+    },
+    {
+      title: "Networking & Identity",
+      color: "amber",
+      rows: [
+        { term: "VNet", desc: "Private isolated network — the AWS VPC equivalent", code: "az network vnet create --name vnet1 \\\n  --address-prefix 10.0.0.0/16 \\\n  --subnet-name subnet1 --subnet-prefix 10.0.1.0/24" },
+        { term: "NSG", desc: "Stateful firewall of allow/deny rules on a subnet or NIC", code: "az network nsg create --name nsg1\naz network nsg rule create --nsg-name nsg1 \\\n  --name allow-https --priority 100 \\\n  --access Allow --protocol Tcp --destination-port-ranges 443" },
+        { term: "Azure Load Balancer", desc: "L4 load balancing across VMs/VMSS", code: "az network lb create --name lb1 --sku Standard" },
+        { term: "Application Gateway", desc: "L7 load balancer with WAF and TLS termination", code: "az network application-gateway create --name agw1 \\\n  --sku WAF_v2 --capacity 2" },
+        { term: "Private Endpoint", desc: "Private IP in your VNet mapped to a PaaS resource — no public internet hop", code: "az network private-endpoint create --name pe1 \\\n  --vnet-name vnet1 --subnet subnet1 \\\n  --private-connection-resource-id <resource-id>" },
+        { term: "Microsoft Entra ID", desc: "Identity backbone (2023 rename of Azure AD) for humans + workloads", code: "az ad user list --output table\naz ad sp list --display-name myapp" },
+        { term: "Azure RBAC", desc: "Additive-only role assignments at a scope — cannot express a deny", code: "az role assignment create --assignee <id> \\\n  --role 'Reader' --scope /subscriptions/<sub>/resourceGroups/rg1" },
+        { term: "Managed Identity", desc: "Auto-managed Entra ID identity attached to a resource — zero stored creds", code: "az webapp identity assign --name app1\naz keyvault set-policy --name kv1 \\\n  --object-id <principal-id> --secret-permissions get list" },
+        { term: "AKS Workload Identity", desc: "Federates a K8s service account with an Entra ID app — no secret stored", code: "az aks update --name aks1 --enable-oidc-issuer \\\n  --enable-workload-identity" },
+        { term: "Azure Policy", desc: "Can enforce a hard DENY — the only mechanism RBAC cannot provide", code: "az policy assignment create --name deny-public-ip \\\n  --policy <policy-definition-id> --scope <mg-or-sub-scope>" },
+      ],
+    },
+    {
+      title: "Common Pitfalls",
+      color: "rose",
+      rows: [
+        { term: "Owner/Contributor at subscription scope", desc: "The #1 real-world RBAC finding — grant narrowest role at narrowest scope", code: "# WRONG: --role Owner --scope /subscriptions/<sub>\n# RIGHT: --role Contributor --scope .../resourceGroups/rg1" },
+        { term: "Public blob containers", desc: "Anonymously readable by URL guessing", code: "# WRONG\naz storage container create --name c1 --public-access blob\n# RIGHT\naz storage container create --name c1 --public-access off" },
+        { term: "Storage account keys in config", desc: "Full-account access, no expiry — use managed identity or short-lived SAS instead", code: "# avoid: --auth-mode key\n# prefer: --auth-mode login (Entra ID identity)" },
+        { term: "One giant resource group", desc: "Breaks RBAC scoping, cost allocation, blast-radius containment", code: "One resource group per workload PER environment" },
+        { term: "Missing zone redundancy", desc: "Default SKU is often single-zone — verify, don't assume", code: "az vm create ... --zone 1 2 3   # explicit zone redundancy" },
+        { term: "Resource provider not registered", desc: "Fresh subscriptions need providers registered before first use", code: "az provider register --namespace Microsoft.Web" },
+        { term: "RBAC vs Policy confusion", desc: "RBAC is additive-only; Policy is the only hard-deny mechanism", code: "Policy denies win regardless of any role\nassignment that would otherwise allow it" },
+        { term: "AWS mental model mismatch", desc: "Subscription != AWS account defaults — check isolation boundaries explicitly", code: "See Comparisons table: Account->Subscription,\nVPC->VNet, IAM Role->Managed Identity" },
+      ],
+    },
+    {
+      title: "Monitoring, Cost & Toolbelt",
+      color: "cyan",
+      rows: [
+        { term: "Azure Monitor", desc: "The umbrella observability platform: metrics, logs, alerts", code: "az monitor activity-log list \\\n  --resource-group rg1 --output table" },
+        { term: "Application Insights", desc: "APM layer — RED metrics, dependency map, exceptions auto-captured", code: "from azure.monitor.opentelemetry import configure_azure_monitor\nconfigure_azure_monitor(connection_string='...')" },
+        { term: "KQL (Log Analytics)", desc: "Kusto Query Language — the query language for logs/metrics investigation", code: "requests\n| where timestamp > ago(1h)\n| summarize p95=percentile(duration,95) by operation_Name" },
+        { term: "Network Watcher", desc: "IP flow verify, connection troubleshoot, packet capture", code: "az network watcher test-ip-flow --vm vm1 \\\n  --direction Inbound --protocol TCP --local 10.0.1.4:443 \\\n  --remote 1.2.3.4:0" },
+        { term: "Cost Management budget", desc: "Alert before a surprise bill, not after", code: "az consumption budget create --budget-name cap \\\n  --amount 1000 --category cost" },
+        { term: "Reserved Instances / Savings Plans", desc: "Discount for steady-state, predictable workloads", code: "Committed 1yr/3yr usage -> up to ~70% off\non-demand VM/DB pricing (verify current rate)" },
+        { term: "Spot VMs", desc: "Deep discount for interruptible batch workloads", code: "az vm create ... --priority Spot \\\n  --eviction-policy Deallocate --max-price -1" },
+        { term: "Azure Hybrid Benefit", desc: "Reuse existing Windows Server/SQL Server licenses in Azure", code: "az vm create ... --license-type Windows_Server" },
+        { term: "Bicep validate/what-if", desc: "Always preview IaC changes before applying to a shared environment", code: "az deployment group validate --template-file main.bicep\naz deployment group what-if --template-file main.bicep" },
+        { term: "AWS-to-Azure quick map", desc: "Fast lookup for engineers coming from AWS", code: "EC2->VM  S3->Blob  VPC->VNet\nIAM Role->Managed Identity  Lambda->Functions\nEKS->AKS  CloudWatch->Azure Monitor" },
+      ],
+    },
+  ],
+};
+
+export default azure;

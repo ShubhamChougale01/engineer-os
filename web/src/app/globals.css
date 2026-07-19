@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface: 250 250 250;
+  --surface-raised: 255 255 255;
+  --ink: 23 23 23;
+  --ink-muted: 82 82 91;
+  --ink-faint: 161 161 170;
+  --accent: 124 58 237;
+  --accent-soft: 237 233 254;
+  --line: 228 228 231;
+}
+
+.dark {
+  --surface: 9 9 11;
+  --surface-raised: 24 24 27;
+  --ink: 244 244 245;
+  --ink-muted: 161 161 170;
+  --ink-faint: 113 113 122;
+  --accent: 167 139 250;
+  --accent-soft: 46 16 101;
+  --line: 39 39 42;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+body {
+  @apply bg-surface text-ink antialiased;
+}
+
+/* ---------- Markdown prose ---------- */
+
+.prose-aeos {
+  @apply text-[15px] leading-7 text-ink;
+}
+.prose-aeos h1,
+.prose-aeos h2,
+.prose-aeos h3,
+.prose-aeos h4 {
+  @apply font-semibold text-ink mt-6 mb-2 scroll-mt-20;
+}
+.prose-aeos h1 { @apply text-2xl; }
+.prose-aeos h2 { @apply text-xl; }
+.prose-aeos h3 { @apply text-lg; }
+.prose-aeos p { @apply my-3; }
+.prose-aeos a { @apply text-accent underline underline-offset-2 hover:opacity-80; }
+.prose-aeos ul { @apply list-disc pl-6 my-3 space-y-1; }
+.prose-aeos ol { @apply list-decimal pl-6 my-3 space-y-1; }
+.prose-aeos blockquote { @apply border-l-2 border-accent/50 pl-4 my-4 text-ink-muted italic; }
+.prose-aeos hr { @apply my-6 border-line; }
+.prose-aeos strong { @apply font-semibold; }
+
+.prose-aeos code {
+  @apply font-mono text-[13px] bg-surface-raised border border-line rounded px-1.5 py-0.5;
+}
+.prose-aeos pre {
+  @apply my-4 overflow-x-auto rounded-xl border border-line bg-surface-raised p-4;
+}
+.prose-aeos pre code {
+  @apply border-0 bg-transparent p-0 text-[13px] leading-6;
+}
+
+.prose-aeos table {
+  @apply my-4 w-full border-collapse text-sm;
+}
+.prose-aeos th {
+  @apply border border-line bg-surface-raised px-3 py-2 text-left font-semibold;
+}
+.prose-aeos td {
+  @apply border border-line px-3 py-2 align-top;
+}
+
+/* Mermaid diagrams */
+.mermaid-container svg {
+  @apply mx-auto my-2 max-w-full;
+}
+
+/* Thin scrollbars for TOC */
+.toc-scroll {
+  scrollbar-width: thin;
+}

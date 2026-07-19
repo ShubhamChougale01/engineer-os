@@ -1,0 +1,101 @@
+import type { CheatSheetData } from "./types";
+
+const encryption: CheatSheetData = {
+  title: "The Ultimate Encryption Cheat Sheet",
+  subtitle: "Symmetric & asymmetric crypto · AEAD · key management · production toolbelt",
+  sections: [
+    {
+      title: "Core Concepts",
+      color: "violet",
+      rows: [
+        { term: "Encryption", desc: "Reversible transform: given ciphertext + key, recover exact plaintext", code: "plaintext --key--> ciphertext\nciphertext --same/related key--> plaintext" },
+        { term: "Hashing (contrast)", desc: "One-way: no key, cannot recover input. Use for passwords/integrity, not secrecy of recoverable data", code: "See the Hashing skill:\nencrypt = reversible, needs a key\nhash = one-way, no key at all" },
+        { term: "Encoding is NOT encryption", desc: "Base64/hex are reversible with NO key -- zero confidentiality", code: "import base64\nbase64.b64encode(b'secret')\nbase64.b64decode(x)  # anyone can do this" },
+        { term: "Symmetric encryption", desc: "One shared key, both directions. Fast. Needs secure key distribution", code: "AES, ChaCha20-Poly1305" },
+        { term: "Asymmetric encryption", desc: "Public/private key pair. Solves key distribution. Slow, size-limited", code: "RSA, ECC (X25519, Ed25519)" },
+        { term: "Hybrid encryption", desc: "Asymmetric to exchange a symmetric session key, then symmetric for bulk data -- what TLS does", code: "ECDHE handshake -> session key\nAES-GCM encrypts all app data" },
+        { term: "AEAD", desc: "Authenticated Encryption with Associated Data -- confidentiality + integrity in one primitive", code: "AES-GCM, ChaCha20-Poly1305\noutput = ciphertext + auth tag" },
+        { term: "Nonce / IV", desc: "Value unique per encryption under a given key. NEVER reuse", code: "nonce = os.urandom(12)  # 96-bit, GCM standard" },
+        { term: "Forward secrecy", desc: "Ephemeral session keys mean a later key leak can't decrypt past traffic", code: "ECDHE = Elliptic Curve Diffie-Hellman Ephemeral" },
+        { term: "At rest / in transit / in use", desc: "Three states of data needing different protections", code: "At rest: AES-256 on disk/DB\nIn transit: TLS\nIn use: confidential computing / TEEs" },
+      ],
+    },
+    {
+      title: "Symmetric: AES & Modes",
+      color: "blue",
+      rows: [
+        { term: "AES", desc: "Advanced Encryption Standard, block cipher, 128/192/256-bit keys, NIST FIPS 197 (2001)", code: "16-byte (128-bit) block size\nDesigned by Daemen & Rijmen (Rijndael)" },
+        { term: "ECB mode -- NEVER USE", desc: "Encrypts each block independently -- identical plaintext blocks leak identical ciphertext blocks", code: "'ECB penguin': encrypt a bitmap with ECB,\nthe penguin outline is still visible in ciphertext" },
+        { term: "CBC mode (legacy)", desc: "Chains blocks via XOR with previous ciphertext. Needs padding; vulnerable to padding-oracle attacks if unauthenticated", code: "Requires random IV per message\nPair with HMAC if used at all -- prefer GCM" },
+        { term: "CTR mode", desc: "Turns block cipher into a stream cipher by encrypting a counter and XORing with plaintext", code: "No padding needed\nFoundation of GCM's encryption step" },
+        { term: "GCM mode (modern default)", desc: "AEAD: CTR-mode encryption + GMAC authentication tag. Verify tag before trusting plaintext", code: "from cryptography.hazmat.primitives.ciphers.aead import AESGCM\nkey = AESGCM.generate_key(bit_length=256)" },
+        { term: "AES-GCM encrypt/decrypt", desc: "Low-level authenticated symmetric encryption", code: "nonce = os.urandom(12)\nct = AESGCM(key).encrypt(nonce, data, None)\npt = AESGCM(key).decrypt(nonce, ct, None)" },
+        { term: "ChaCha20-Poly1305", desc: "Modern stream cipher + Poly1305 MAC. Fast in pure software; TLS 1.3 default without AES-NI", code: "from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305" },
+        { term: "3DES / DES (legacy, avoid)", desc: "56-bit DES broken by brute force; 3DES deprecated by NIST for new systems", code: "Use AES-256 instead of any DES variant" },
+        { term: "Associated data (AAD)", desc: "Authenticated but not encrypted -- e.g. a record ID that must not be tampered with", code: "AESGCM(key).encrypt(nonce, data, associated_data=b'user:123')" },
+      ],
+    },
+    {
+      title: "Asymmetric & Hybrid",
+      color: "emerald",
+      rows: [
+        { term: "RSA", desc: "Based on difficulty of factoring large primes. 2048-4096-bit keys. Slow, size-limited payload", code: "from cryptography.hazmat.primitives.asymmetric import rsa\npriv = rsa.generate_private_key(public_exponent=65537, key_size=2048)" },
+        { term: "RSA-OAEP", desc: "Correct padding scheme for RSA encryption -- never use raw/textbook RSA", code: "from cryptography.hazmat.primitives.asymmetric import padding\nfrom cryptography.hazmat.primitives import hashes\npadding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None)" },
+        { term: "Elliptic curve (ECC)", desc: "Same security as RSA with much smaller keys. 256-bit ECC ~ 3072-bit RSA", code: "X25519 -- key exchange\nEd25519 -- digital signatures" },
+        { term: "X25519 key exchange", desc: "Modern ECDH -- both sides compute the same shared secret without transmitting it", code: "priv = x25519.X25519PrivateKey.generate()\nshared = priv.exchange(other_public_key)" },
+        { term: "Diffie-Hellman", desc: "1976 breakthrough: solves the key-distribution problem mathematically", code: "Two parties agree on a shared secret\nover a network an attacker can observe" },
+        { term: "Digital signatures", desc: "Private key signs, public key verifies -- authenticity + integrity, not confidentiality", code: "RSA-PSS or Ed25519 for signing\nUsed in TLS certs, JWTs, code signing" },
+        { term: "TLS handshake (hybrid encryption)", desc: "ECDHE key exchange establishes a session key, then AES-GCM/ChaCha20 for all app data", code: "See the TLS & HTTPS skill for the full sequence" },
+        { term: "Why not RSA for bulk data", desc: "~100-1000x slower than AES-GCM per byte; limited payload size (~190 bytes for 2048-bit key)", code: "Use RSA/ECC only to exchange a small\nsymmetric key -- never for the whole payload" },
+      ],
+    },
+    {
+      title: "Key Management & Envelope Encryption",
+      color: "amber",
+      rows: [
+        { term: "Key generation", desc: "Always use a CSPRNG, never a general-purpose random module", code: "import secrets\ntoken = secrets.token_bytes(32)\nAESGCM.generate_key(bit_length=256)" },
+        { term: "Key rotation", desc: "Replace keys on a schedule and immediately after suspected compromise", code: "MultiFernet([Fernet(new_key), Fernet(old_key)])\n# decrypts with ANY key, encrypts with newest" },
+        { term: "Key distribution problem", desc: "How do two parties share a secret over an observed network? Solved by asymmetric crypto", code: "Symmetric alone: no good answer\nAsymmetric (DH/RSA): mathematically solved" },
+        { term: "Envelope encryption", desc: "Data key encrypts data; master key (in KMS/HSM) encrypts the data key", code: "1. GenerateDataKey -> plaintext DEK + wrapped DEK\n2. AES-GCM(data, DEK) -> ciphertext\n3. store ciphertext + wrapped DEK, discard DEK" },
+        { term: "Cloud KMS pattern", desc: "AWS KMS / GCP Cloud KMS / Azure Key Vault all implement envelope encryption", code: "kms.generate_data_key(master_key_id)\nkms.decrypt(wrapped_dek)  # unwrap on read" },
+        { term: "Why envelope encryption", desc: "HSM only touches small keys (fast, cheap); rotation re-wraps DEKs, not all data", code: "Rotating master key = re-wrap DEKs only\nNever re-encrypt bulk data on rotation" },
+        { term: "Secrets Management", desc: "Where keys themselves must live -- never in code, env dumps, or git", code: "See the Secrets Management skill:\nVault, KMS, HSM, workload identity" },
+        { term: "Key-derivation function (KDF)", desc: "Derive an encryption key from a password -- use a slow, memory-hard KDF", code: "from cryptography.hazmat.primitives.kdf.scrypt import Scrypt\n# never a fast hash for password-based key derivation" },
+      ],
+    },
+    {
+      title: "Pitfalls & Gotchas",
+      color: "rose",
+      rows: [
+        { term: "Rolling your own crypto", desc: "Never invent a cipher or protocol -- use standardized, audited libraries", code: "WRONG: def homemade_xor(data, key): ...\nRIGHT: Fernet(key).encrypt(data)" },
+        { term: "ECB mode", desc: "Leaks plaintext structure through repeated ciphertext blocks -- never use it", code: "WRONG: modes.ECB()\nRIGHT: AESGCM (authenticated mode)" },
+        { term: "Hardcoded keys", desc: "Ships to every clone, backup, and git history forever", code: "WRONG: SECRET_KEY = b'abc123...'\nRIGHT: key = os.environb[b'APP_KEY']  # from a vault" },
+        { term: "Reused nonce/IV", desc: "Breaks confidentiality; in GCM can leak the auth key entirely, enabling forgery", code: "WRONG: FIXED_NONCE reused every call\nRIGHT: nonce = os.urandom(12)  # fresh every time" },
+        { term: "Missing authentication", desc: "Unauthenticated ciphertext enables padding-oracle / bit-flipping attacks", code: "WRONG: raw CBC with no MAC\nRIGHT: AES-GCM or CBC + HMAC (encrypt-then-MAC)" },
+        { term: "Encrypting instead of hashing passwords", desc: "Reversible storage means one key leak recovers every password at once", code: "WRONG: Fernet(key).encrypt(password)\nRIGHT: bcrypt/argon2 hash (see Hashing skill)" },
+        { term: "Base64 mistaken for security", desc: "No key at all -- instantly reversible by anyone", code: "base64.b64decode(token)  # trivial, no secret needed" },
+        { term: "Nonce reuse real-world cases", desc: "WEP (24-bit IV, RC4) and Sony PS3 (reused ECDSA nonce) both fully broken this way", code: "WEP: key recovered from captured traffic\nPS3: private signing key extracted" },
+        { term: "Ignoring key rotation", desc: "No tested plan for what happens when a key must be retired", code: "Test: does decryption still work for OLD\nciphertext after adding a new key?" },
+        { term: "Encryption != complete security", desc: "Access control, auditing, and correct key storage all still matter", code: "Encrypted data + leaked key = no protection\nEncrypted data + weak IAM = no protection" },
+      ],
+    },
+    {
+      title: "Production Toolbelt (Python)",
+      color: "cyan",
+      rows: [
+        { term: "Library", desc: "pyca/cryptography -- the audited, standard Python crypto library", code: "uv add cryptography" },
+        { term: "Fernet (default choice)", desc: "High-level authenticated symmetric encryption -- AES-128-CBC + HMAC, versioned", code: "from cryptography.fernet import Fernet\nkey = Fernet.generate_key()\ntoken = Fernet(key).encrypt(b'data')\nFernet(key).decrypt(token)" },
+        { term: "MultiFernet", desc: "Encrypt with newest key, decrypt with any key in the list -- rotation-safe", code: "MultiFernet([Fernet(new), Fernet(old)])" },
+        { term: "AESGCM (low-level)", desc: "Use when you need associated data or protocol-level control", code: "from cryptography.hazmat.primitives.ciphers.aead import AESGCM" },
+        { term: "Testing tamper detection", desc: "Flip a ciphertext bit; assert decryption raises InvalidTag", code: "from cryptography.exceptions import InvalidTag\nwith pytest.raises(InvalidTag): aesgcm.decrypt(...)" },
+        { term: "Never log", desc: "Plaintext, raw keys, and nonces-alongside-ciphertext should never hit logs", code: "log.info('field_encrypted', key_id=key_id)  # OK\nlog.info('value=%s', plaintext)  # NEVER" },
+        { term: "Monitoring", desc: "KMS call latency, decryption failure rate, key age since rotation", code: "InvalidTag / AccessDenied spike -> alert\nkey_age_days > rotation_policy -> alert" },
+        { term: "Confidential computing", desc: "Encryption-in-use via hardware TEEs -- closes the last gap beyond at-rest/in-transit", code: "Intel SGX, AMD SEV, AWS Nitro Enclaves" },
+        { term: "Post-quantum (2024 NIST standards)", desc: "ML-KEM (FIPS 203), ML-DSA (FIPS 204) begin the migration away from classical RSA/ECC for long-lived secrets", code: "Hybrid X25519 + ML-KEM already used\nin some TLS 1.3 deployments" },
+        { term: "Related skills", desc: "Pair this page with these for the full picture", code: "Hashing -- one-way vs reversible\nTLS & HTTPS -- hybrid encryption in practice\nSecrets Management -- where keys live" },
+      ],
+    },
+  ],
+};
+
+export default encryption;

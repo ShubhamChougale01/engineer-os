@@ -1,0 +1,103 @@
+import type { SkillContent } from "./types";
+
+/**
+ * Content registry: maps a skill slug to a lazy loader for its full page.
+ * Lazy imports keep each skill's (large) content out of the shared bundle —
+ * a page only ships the content it renders.
+ *
+ * To add a skill: create src/content/skills/<slug>.ts, register it here,
+ * and set the skill's status to "done" in src/data/catalog.ts.
+ */
+const REGISTRY: Record<string, () => Promise<{ default: SkillContent }>> = {
+  python: () => import("./skills/python"),
+  javascript: () => import("./skills/javascript"),
+  typescript: () => import("./skills/typescript"),
+  go: () => import("./skills/go"),
+  rust: () => import("./skills/rust"),
+  java: () => import("./skills/java"),
+  fastapi: () => import("./skills/fastapi"),
+  cpp: () => import("./skills/cpp"),
+  django: () => import("./skills/django"),
+  flask: () => import("./skills/flask"),
+  express: () => import("./skills/express"),
+  "spring-boot": () => import("./skills/spring-boot"),
+  nodejs: () => import("./skills/nodejs"),
+  nestjs: () => import("./skills/nestjs"),
+  postgresql: () => import("./skills/postgresql"),
+  mysql: () => import("./skills/mysql"),
+  mongodb: () => import("./skills/mongodb"),
+  redis: () => import("./skills/redis"),
+  neo4j: () => import("./skills/neo4j"),
+  elasticsearch: () => import("./skills/elasticsearch"),
+  clickhouse: () => import("./skills/clickhouse"),
+  sqlite: () => import("./skills/sqlite"),
+  faiss: () => import("./skills/faiss"),
+  pinecone: () => import("./skills/pinecone"),
+  milvus: () => import("./skills/milvus"),
+  weaviate: () => import("./skills/weaviate"),
+  qdrant: () => import("./skills/qdrant"),
+  chroma: () => import("./skills/chroma"),
+  oauth: () => import("./skills/oauth"),
+  jwt: () => import("./skills/jwt"),
+  "cookies-sessions": () => import("./skills/cookies-sessions"),
+  rbac: () => import("./skills/rbac"),
+  abac: () => import("./skills/abac"),
+  rest: () => import("./skills/rest"),
+  graphql: () => import("./skills/graphql"),
+  grpc: () => import("./skills/grpc"),
+  websockets: () => import("./skills/websockets"),
+  sse: () => import("./skills/sse"),
+  linux: () => import("./skills/linux"),
+  networking: () => import("./skills/networking"),
+  "operating-systems": () => import("./skills/operating-systems"),
+  dsa: () => import("./skills/dsa"),
+  algorithms: () => import("./skills/algorithms"),
+  oop: () => import("./skills/oop"),
+  solid: () => import("./skills/solid"),
+  "design-patterns": () => import("./skills/design-patterns"),
+  concurrency: () => import("./skills/concurrency"),
+  multithreading: () => import("./skills/multithreading"),
+  "caching-cs": () => import("./skills/caching-cs"),
+  "sql-injection": () => import("./skills/sql-injection"),
+  xss: () => import("./skills/xss"),
+  csrf: () => import("./skills/csrf"),
+  encryption: () => import("./skills/encryption"),
+  hashing: () => import("./skills/hashing"),
+  "tls-https": () => import("./skills/tls-https"),
+  "secrets-management": () => import("./skills/secrets-management"),
+  "owasp-top-10": () => import("./skills/owasp-top-10"),
+  aws: () => import("./skills/aws"),
+  azure: () => import("./skills/azure"),
+  gcp: () => import("./skills/gcp"),
+  docker: () => import("./skills/docker"),
+  kubernetes: () => import("./skills/kubernetes"),
+  terraform: () => import("./skills/terraform"),
+  cicd: () => import("./skills/cicd"),
+  "github-actions": () => import("./skills/github-actions"),
+  jenkins: () => import("./skills/jenkins"),
+  git: () => import("./skills/git"),
+  logging: () => import("./skills/logging"),
+  metrics: () => import("./skills/metrics"),
+  tracing: () => import("./skills/tracing"),
+  prometheus: () => import("./skills/prometheus"),
+  grafana: () => import("./skills/grafana"),
+  opentelemetry: () => import("./skills/opentelemetry"),
+  "distributed-systems": () => import("./skills/distributed-systems"),
+  "cap-theorem": () => import("./skills/cap-theorem"),
+  "load-balancers": () => import("./skills/load-balancers"),
+  "reverse-proxy": () => import("./skills/reverse-proxy"),
+  "api-gateway": () => import("./skills/api-gateway"),
+  cdn: () => import("./skills/cdn"),
+  "caching-systems": () => import("./skills/caching-systems"),
+  "message-queues": () => import("./skills/message-queues"),
+  kafka: () => import("./skills/kafka"),
+  rabbitmq: () => import("./skills/rabbitmq"),
+};
+
+export const hasContent = (slug: string): boolean => slug in REGISTRY;
+
+export async function loadContent(slug: string): Promise<SkillContent | null> {
+  const loader = REGISTRY[slug];
+  if (!loader) return null;
+  return (await loader()).default;
+}

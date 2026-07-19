@@ -1,0 +1,100 @@
+import type { CheatSheetData } from "./types";
+
+const javascript: CheatSheetData = {
+  title: "The Ultimate JavaScript Cheat Sheet",
+  subtitle: "Core language · data structures · async mastery · production toolbelt",
+  sections: [
+    {
+      title: "Language Core",
+      color: "violet",
+      rows: [
+        { term: "const / let", desc: "Block-scoped declarations — never use var", code: "const x = 1;   // no reassign\nlet y = 2;     // reassignable\ny += 1;" },
+        { term: "Types", desc: "7 primitives + objects; typeof to inspect", code: "typeof 'hi'      // 'string'\ntypeof 42        // 'number'\ntypeof null      // 'object' (bug!)\nArray.isArray([]) // true" },
+        { term: "=== always", desc: "Strict equality — no type coercion", code: "1 === '1'   // false (good)\n1 == '1'    // true (danger)\nx == null   // ok: null OR undefined" },
+        { term: "Falsy values", desc: "Exactly six — everything else is truthy", code: "false, 0, '', null,\nundefined, NaN\n// [] and {} are TRUTHY" },
+        { term: "Template literals", desc: "Backtick strings with interpolation", code: "// backtick-quoted:\n// 'Hi ' + name  becomes\n// backtick Hi dollar{name} backtick\nconst s = 'Hi ' + name + '!';" },
+        { term: "Ternary & defaults", desc: "Inline branching and fallbacks", code: "const label = ok ? 'yes' : 'no';\nconst port = cfg.port ?? 3000; // null/undef only\nconst v = maybe || 'fallback';  // any falsy" },
+        { term: "Optional chaining", desc: "Safe access to maybe-missing data", code: "user?.address?.city  // undefined, no throw\nuser?.notify?.()     // call if exists\nlist?.[0]" },
+        { term: "Conversion", desc: "Be explicit — never rely on coercion", code: "Number('42')  parseFloat('3.14')\nString(99)    Boolean(v)\n(0.1 + 0.2).toFixed(2) // floats!" },
+        { term: "Error handling", desc: "try/catch/finally + custom errors", code: "try { risky(); }\ncatch (err) {\n  if (err instanceof ApiError) fix(err);\n  else throw err;   // never swallow\n} finally { cleanup(); }" },
+      ],
+    },
+    {
+      title: "Arrays & Objects",
+      color: "blue",
+      rows: [
+        { term: "Create & access", desc: "Literals, index, negative via at()", code: "const a = [1, 2, 3];\na[0]; a.at(-1); a.length;\na.includes(2); a.indexOf(3);" },
+        { term: "map / filter / reduce", desc: "The data pipeline trio", code: "orders.filter(o => o.paid)\n  .map(o => o.total)\n  .reduce((sum, t) => sum + t, 0);" },
+        { term: "find / some / every", desc: "Search and boolean checks", code: "users.find(u => u.id === 7)\nusers.some(u => u.admin)   // any?\nusers.every(u => u.active) // all?" },
+        { term: "Immutable methods (ES2023)", desc: "Copy-not-mutate versions", code: "a.toSorted((x, y) => x - y)\na.toReversed()\na.toSpliced(1, 2)\na.with(0, 'new')" },
+        { term: "Spread & rest", desc: "Copy, merge, collect", code: "const copy = [...a];\nconst merged = { ...defs, ...opts };\nfunction f(...args) { }" },
+        { term: "Destructuring", desc: "Unpack with defaults and rename", code: "const { name, age = 18 } = user;\nconst { id: userId } = row;\nconst [first, ...rest] = list;" },
+        { term: "Object utilities", desc: "Keys, values, entries, grouping", code: "Object.keys(o)  Object.values(o)\nObject.entries(o) // [[k, v], ...]\nObject.groupBy(items, i => i.type)" },
+        { term: "Deep copy", desc: "structuredClone — handles nesting & cycles", code: "const clone = structuredClone(obj);\n// JSON.parse(JSON.stringify(o))\n// loses dates, undefined, cycles" },
+        { term: "Map / Set", desc: "Real hash structures — O(1), any key type", code: "const m = new Map([[k, v]]);\nm.get(k); m.has(k); m.size;\nconst uniq = [...new Set(list)];" },
+        { term: "Freeze vs const", desc: "const locks binding; freeze locks contents", code: "const o = { a: 1 };\no.a = 2;          // allowed!\nObject.freeze(o); // now immutable (shallow)" },
+      ],
+    },
+    {
+      title: "Functions, this & Classes",
+      color: "amber",
+      rows: [
+        { term: "Arrow functions", desc: "Concise; NO own this (lexical capture)", code: "const sq = x => x * x;\nconst add = (a, b = 2) => a + b;\n// great for callbacks,\n// wrong for dynamic-this methods" },
+        { term: "The 4 this rules", desc: "Determined by the CALL, not definition", code: "obj.m()        // this = obj\nf()            // undefined (strict)\nf.call(x)      // this = x\nnew Fn()       // new object" },
+        { term: "bind / call / apply", desc: "Explicit this control", code: "const bound = fn.bind(ctx);\nfn.call(ctx, a, b);\nfn.apply(ctx, [a, b]);" },
+        { term: "Closures", desc: "Functions remember their birth scope", code: "function counter() {\n  let n = 0;          // private\n  return () => ++n;\n}\nconst inc = counter(); inc(); // 1" },
+        { term: "Class syntax", desc: "Sugar over prototypes; #private fields", code: "class Q extends Base {\n  #items = [];\n  get size() { return this.#items.length; }\n  static make() { return new Q(); }\n}" },
+        { term: "Prototype chain", desc: "Property lookup walks the chain", code: "const dog = Object.create(animal);\nObject.getPrototypeOf(dog) === animal;\n// instance -> Class.prototype\n//  -> Object.prototype -> null" },
+        { term: "Debounce (know cold)", desc: "The classic closure interview question", code: "function debounce(fn, ms) {\n  let t;\n  return function (...a) {\n    clearTimeout(t);\n    t = setTimeout(() => fn.apply(this, a), ms);\n  };\n}" },
+        { term: "Generators", desc: "Lazy sequences with yield", code: "function* ids() {\n  let i = 0;\n  while (true) yield i++;\n}\nconst g = ids(); g.next().value;" },
+      ],
+    },
+    {
+      title: "Async Mastery",
+      color: "cyan",
+      rows: [
+        { term: "Event loop order", desc: "Sync → ALL microtasks → next macrotask", code: "log('A');\nsetTimeout(() => log('D'));   // macro\nPromise.resolve().then(() => log('C'));\nlog('B');   // output: A B C D" },
+        { term: "async / await", desc: "Pauses the function, not the thread", code: "async function run() {\n  const r = await step1();\n  return step2(r);\n}\n// errors surface as throws" },
+        { term: "fetch done right", desc: "No default timeout; no reject on 404!", code: "const r = await fetch(url, {\n  signal: AbortSignal.timeout(5000),\n});\nif (!r.ok) throw new Error('HTTP ' + r.status);\nconst data = await r.json();" },
+        { term: "Concurrent, not serial", desc: "Independent awaits belong in Promise.all", code: "// slow: await a(); await b();\nconst [x, y] =\n  await Promise.all([a(), b()]);" },
+        { term: "allSettled / race / any", desc: "The other combinators", code: "await Promise.allSettled(ps) // never rejects\nawait Promise.race(ps)       // first settle\nawait Promise.any(ps)        // first success" },
+        { term: "AbortController", desc: "Cancellation — stop buttons, timeouts", code: "const c = new AbortController();\nfetch(url, { signal: c.signal });\nc.abort();  // rejects with AbortError" },
+        { term: "Async iteration", desc: "Streams and paginated APIs", code: "for await (const chunk of stream) {\n  render(chunk);\n}\n// exactly how LLM tokens arrive" },
+        { term: "Deadly sins", desc: "The three async bugs to never write", code: "save(x);            // floating promise!\nitems.forEach(async ...) // ignored!\nawait inside loop for independent work" },
+        { term: "Promisify a callback", desc: "Wrap legacy APIs", code: "const sleep = ms =>\n  new Promise(res => setTimeout(res, ms));\nawait sleep(500);" },
+      ],
+    },
+    {
+      title: "Gotchas & Pitfalls",
+      color: "rose",
+      rows: [
+        { term: "sort() is lexicographic", desc: "AND it mutates", code: "[10, 9, 1].sort()  // [1, 10, 9] !!\n[10, 9, 1].toSorted((a, b) => a - b)" },
+        { term: "Float money bug", desc: "Binary floats can't do decimals", code: "0.1 + 0.2 === 0.3  // false\n// use integer cents\n// or a decimal library" },
+        { term: "this lost on extract", desc: "Method reference loses its object", code: "const f = obj.getName;\nf();  // this = undefined\nconst ok = obj.getName.bind(obj);" },
+        { term: "NaN weirdness", desc: "NaN never equals anything", code: "NaN === NaN        // false\nNumber.isNaN(v)    // the check\n[NaN].includes(NaN) // true (!)" },
+        { term: "for…in vs for…of", desc: "Keys (plus inherited!) vs values", code: "for (const v of arr) { }  // values ✓\nfor (const k in obj) { }  // keys\n// never for…in on arrays" },
+        { term: "TDZ", desc: "let/const exist but are unusable pre-declaration", code: "use(x);        // ReferenceError\nlet x = 1;     // declaration line\n// var would give undefined instead" },
+        { term: "JSON.parse throws", desc: "Any network/user string can be invalid", code: "let data;\ntry { data = JSON.parse(raw); }\ncatch { data = null; }" },
+        { term: "setInterval overlap", desc: "Slow async work stacks up", code: "// prefer self-scheduling:\nasync function poll() {\n  await work();\n  setTimeout(poll, 1000);\n}" },
+      ],
+    },
+    {
+      title: "Production Toolbelt",
+      color: "emerald",
+      rows: [
+        { term: "Modules (ESM)", desc: "import/export; type: module in package.json", code: "import def, { named } from './m.js';\nexport const a = 1;\nexport default thing;\nconst lazy = await import('./big.js');" },
+        { term: "npm essentials", desc: "Reproducible installs or nothing", code: "npm ci          # exact lockfile install\nnpm audit       # CVE scan\nnpm outdated    # what to upgrade\nnpx vitest      # run without install" },
+        { term: "Validation at edges", desc: "Never trust external data shapes", code: "const User = z.object({\n  email: z.string().email(),\n});\nconst user = User.parse(reqBody); // throws" },
+        { term: "Structured logging", desc: "JSON logs, request IDs — not console.log", code: "log.info({ reqId, userId,\n  latencyMs }, 'order placed');" },
+        { term: "Graceful shutdown", desc: "Drain on SIGTERM (Docker/K8s sends it)", code: "process.on('SIGTERM', () => {\n  server.close(() => process.exit(0));\n});" },
+        { term: "Event-loop health", desc: "THE Node metric to watch", code: "import { monitorEventLoopDelay }\n  from 'node:perf_hooks';\nconst h = monitorEventLoopDelay();\nh.enable(); h.percentile(99);" },
+        { term: "Web platform gems", desc: "Use the platform before npm", code: "crypto.randomUUID()\nnew URL(u); new URLSearchParams(q)\nIntl.NumberFormat('en', opts)\nstructuredClone(o)" },
+        { term: "Timing", desc: "Monotonic clocks for measurement", code: "const t0 = performance.now();\nwork();\nperformance.now() - t0; // ms, monotonic" },
+        { term: "XSS defense", desc: "Untrusted strings never become HTML", code: "el.textContent = userInput; // safe\n// el.innerHTML = userInput  NEVER\n// + CSP header in production" },
+        { term: "Security trio", desc: "The JS-specific attack surface", code: "1. XSS: escape output + CSP\n2. Prototype pollution: null-proto maps\n3. Supply chain: lockfile + audit" },
+      ],
+    },
+  ],
+};
+
+export default javascript;

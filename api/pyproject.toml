@@ -1,0 +1,29 @@
+[project]
+name = "ai-engineer-os-api"
+version = "0.2.0"
+description = "AI Engineer OS backend — FastAPI service (auth, phase 2: persistence, AI chat)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic-settings>=2.7",
+    "pydantic[email]>=2.10",
+    "sqlalchemy>=2.0.36",
+    "bcrypt>=4.2",
+    "pyjwt[crypto]>=2.10",
+    "httpx>=0.28",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.9",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

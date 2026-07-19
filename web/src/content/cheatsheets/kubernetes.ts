@@ -1,0 +1,103 @@
+import type { CheatSheetData } from "./types";
+
+const kubernetes: CheatSheetData = {
+  title: "The Ultimate Kubernetes Cheat Sheet",
+  subtitle: "Core objects · kubectl · networking & storage · scheduling · production toolbelt",
+  sections: [
+    {
+      title: "Core Objects",
+      color: "violet",
+      rows: [
+        { term: "Pod", desc: "Smallest deployable unit — one or more containers sharing network/storage", code: "apiVersion: v1\nkind: Pod\nmetadata: { name: my-pod }\nspec:\n  containers:\n    - name: app\n      image: myorg/app:1.0" },
+        { term: "Deployment", desc: "Declares replica count + Pod template; owns a ReplicaSet; adds rolling updates", code: "apiVersion: apps/v1\nkind: Deployment\nspec:\n  replicas: 3\n  selector: { matchLabels: { app: my-app } }\n  template: { ... }" },
+        { term: "ReplicaSet", desc: "Keeps N pods matching a template running — rarely created directly", code: "# Created and owned by a Deployment automatically\nkubectl get rs" },
+        { term: "Namespace", desc: "Logical partition of one cluster — teams, environments, tenants", code: "kubectl create namespace payments\nkubectl get pods -n payments" },
+        { term: "ConfigMap", desc: "Non-sensitive configuration, injected as env vars or mounted files", code: "apiVersion: v1\nkind: ConfigMap\nmetadata: { name: app-config }\ndata:\n  LOG_LEVEL: info" },
+        { term: "Secret", desc: "Sensitive values — base64-encoded by default, NOT encrypted (see Security)", code: "apiVersion: v1\nkind: Secret\nmetadata: { name: app-secret }\ntype: Opaque\nstringData:\n  DB_PASSWORD: changeme" },
+        { term: "Label / Selector", desc: "Key-value tags used by Services/Deployments to find matching Pods", code: "metadata:\n  labels: { app: my-app, tier: backend }\nselector:\n  matchLabels: { app: my-app }" },
+        { term: "kind / apiVersion", desc: "Every manifest declares its object type and API group/version", code: "apiVersion: apps/v1\nkind: Deployment" },
+      ],
+    },
+    {
+      title: "Workload Controllers & Networking",
+      color: "blue",
+      rows: [
+        { term: "StatefulSet", desc: "Stable per-replica identity + storage — databases, brokers", code: "spec:\n  serviceName: pg-headless\n  volumeClaimTemplates:\n    - metadata: { name: data }\n      spec: { resources: { requests: { storage: 10Gi } } }" },
+        { term: "DaemonSet", desc: "Exactly one pod per (matching) node — log shippers, node agents", code: "apiVersion: apps/v1\nkind: DaemonSet\nspec:\n  selector: { matchLabels: { app: node-exporter } }" },
+        { term: "Job / CronJob", desc: "Run-to-completion work, optionally on a schedule", code: "apiVersion: batch/v1\nkind: CronJob\nspec:\n  schedule: \"0 2 * * *\"\n  jobTemplate: { spec: { ... } }" },
+        { term: "Service: ClusterIP", desc: "Internal-only stable IP/DNS in front of a Pod set (the default)", code: "spec:\n  type: ClusterIP\n  selector: { app: my-app }\n  ports: [{ port: 80, targetPort: 8000 }]" },
+        { term: "Service: NodePort", desc: "Opens a fixed port on every node's IP — quick testing, bare metal", code: "spec:\n  type: NodePort\n  ports: [{ port: 80, nodePort: 30080 }]" },
+        { term: "Service: LoadBalancer", desc: "Provisions a cloud external load balancer (AWS/Azure/GCP)", code: "spec:\n  type: LoadBalancer\n  ports: [{ port: 80, targetPort: 8000 }]" },
+        { term: "Ingress", desc: "HTTP(S) host/path routing at the edge, backed by an Ingress Controller", code: "spec:\n  rules:\n    - host: api.example.com\n      http:\n        paths:\n          - path: /\n            backend: { service: { name: api-svc, port: { number: 80 } } }" },
+        { term: "NetworkPolicy", desc: "Restricts pod-to-pod traffic — default is a flat, fully-open network", code: "spec:\n  podSelector: {}\n  policyTypes: [Ingress]   # empty selector + no rules = default deny" },
+      ],
+    },
+    {
+      title: "kubectl Commands",
+      color: "emerald",
+      rows: [
+        { term: "apply / delete", desc: "Declarative create-or-update / remove from a manifest", code: "kubectl apply -f deployment.yaml\nkubectl delete -f deployment.yaml" },
+        { term: "get", desc: "List objects — add -o wide or -o yaml for detail", code: "kubectl get pods\nkubectl get pods -o wide\nkubectl get svc,deploy -n payments" },
+        { term: "describe", desc: "Full status + Events section — the FIRST debugging step", code: "kubectl describe pod my-pod" },
+        { term: "logs", desc: "Container stdout/stderr; --previous for a crashed instance", code: "kubectl logs my-pod\nkubectl logs my-pod --previous\nkubectl logs -f my-pod   # follow/stream" },
+        { term: "exec", desc: "Interactive shell inside a running container", code: "kubectl exec -it my-pod -- sh" },
+        { term: "port-forward", desc: "Reach a pod directly, bypassing Service/Ingress, to isolate a layer", code: "kubectl port-forward my-pod 8080:80" },
+        { term: "scale", desc: "Change replica count imperatively (for quick tests, not GitOps prod)", code: "kubectl scale deployment/my-deploy --replicas=5" },
+        { term: "rollout", desc: "Inspect, watch, or reverse a Deployment's rollout", code: "kubectl rollout status deployment/my-deploy\nkubectl rollout history deployment/my-deploy\nkubectl rollout undo deployment/my-deploy" },
+        { term: "top", desc: "Live CPU/memory usage (requires metrics-server)", code: "kubectl top nodes\nkubectl top pods -n payments" },
+        { term: "get events", desc: "Cluster-wide recent events, sorted by time", code: "kubectl get events --sort-by=.lastTimestamp" },
+        { term: "auth can-i", desc: "Check whether the current identity may perform an action (RBAC)", code: "kubectl auth can-i delete pods -n payments" },
+        { term: "config", desc: "Switch context/namespace defaults", code: "kubectl config get-contexts\nkubectl config set-context --current --namespace=payments" },
+      ],
+    },
+    {
+      title: "Scheduling & Resource Management",
+      color: "amber",
+      rows: [
+        { term: "requests / limits", desc: "Requests feed the scheduler; limits are enforced by the kubelet", code: "resources:\n  requests: { cpu: \"250m\", memory: \"256Mi\" }\n  limits: { cpu: \"500m\", memory: \"512Mi\" }" },
+        { term: "CPU vs memory limit", desc: "CPU limit throttles (compressible); memory limit KILLS (OOMKilled)", code: "# Exceeding memory limit -> container terminated, not slowed down" },
+        { term: "livenessProbe", desc: "Fail => kubelet restarts the container (\"I'm stuck\")", code: "livenessProbe:\n  httpGet: { path: /healthz, port: 8000 }\n  initialDelaySeconds: 10" },
+        { term: "readinessProbe", desc: "Fail => removed from Service endpoints, NOT restarted", code: "readinessProbe:\n  httpGet: { path: /readyz, port: 8000 }\n  periodSeconds: 5" },
+        { term: "startupProbe", desc: "Pauses liveness/readiness until a slow-starting app is ready", code: "startupProbe:\n  httpGet: { path: /healthz, port: 8000 }\n  failureThreshold: 30" },
+        { term: "Taints / tolerations", desc: "Repel pods from a node unless the pod explicitly tolerates it", code: "# kubectl taint nodes gpu-1 workload=gpu:NoSchedule\ntolerations:\n  - key: workload\n    operator: Equal\n    value: gpu\n    effect: NoSchedule" },
+        { term: "Affinity / anti-affinity", desc: "Prefer or require (not) co-locating pods by topology key", code: "affinity:\n  podAntiAffinity:\n    requiredDuringSchedulingIgnoredDuringExecution:\n      - topologyKey: kubernetes.io/hostname" },
+        { term: "HorizontalPodAutoscaler", desc: "Adjusts replica count based on CPU/memory or a custom metric", code: "spec:\n  minReplicas: 2\n  maxReplicas: 10\n  metrics:\n    - type: Resource\n      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }" },
+        { term: "PodDisruptionBudget", desc: "Floor on availability during voluntary disruptions (drains, scale-down)", code: "spec:\n  minAvailable: 2\n  selector: { matchLabels: { app: my-app } }" },
+        { term: "ResourceQuota", desc: "Caps total resource consumption for a whole namespace", code: "spec:\n  hard: { requests.cpu: \"20\", requests.memory: 40Gi, pods: \"50\" }" },
+      ],
+    },
+    {
+      title: "Common Failures & Pitfalls",
+      color: "rose",
+      rows: [
+        { term: "CrashLoopBackOff", desc: "Container starts then exits repeatedly", code: "kubectl logs my-pod --previous   # the actual crash reason" },
+        { term: "ImagePullBackOff", desc: "Wrong image/tag, or missing registry credentials", code: "kubectl describe pod my-pod   # check the exact pull error" },
+        { term: "Pending", desc: "No node satisfies requests/taints/affinity for this pod", code: "kubectl describe pod my-pod   # read the Events section" },
+        { term: "OOMKilled", desc: "Container exceeded its memory limit — a hard kill, not a warning", code: "kubectl describe pod my-pod   # Last State: Terminated, Reason: OOMKilled" },
+        { term: "Evicted", desc: "Node under DiskPressure/MemoryPressure; kubelet evicted the pod", code: "kubectl describe node <node>   # check Conditions" },
+        { term: "Liveness == readiness anti-pattern", desc: "Pointing both at a slow dependency causes a self-inflicted restart storm", code: "# WRONG: livenessProbe checks the database\n# RIGHT: livenessProbe checks only the process itself" },
+        { term: "No resource limits set", desc: "Breaks scheduler bin-packing; a leak has no ceiling", code: "# Always set BOTH requests and limits, sized from real profiling" },
+        { term: "kubectl edit on a live object", desc: "Silently reverted by the next apply/GitOps sync", code: "# Update the SOURCE manifest in Git, then apply — never hand-edit live state" },
+        { term: ":latest image tag", desc: "Mutable — breaks reproducible rollbacks", code: "image: myorg/app:1.4.2   # pin an immutable tag or digest, never :latest" },
+      ],
+    },
+    {
+      title: "Production Toolbelt",
+      color: "cyan",
+      rows: [
+        { term: "Helm install/upgrade", desc: "Templated, parameterized packaging and release management", code: "helm install myapp ./chart --set image.tag=1.4.0\nhelm upgrade myapp ./chart --set image.tag=1.5.0\nhelm rollback myapp 1" },
+        { term: "Helm lint/template", desc: "Validate a chart and render manifests before applying", code: "helm lint ./chart\nhelm template ./chart --values values-prod.yaml" },
+        { term: "GitOps (ArgoCD/Flux)", desc: "A Git repo is the source of truth; a controller reconciles the cluster to match", code: "# Merge a PR to the manifests repo -> ArgoCD/Flux syncs the live cluster" },
+        { term: "kind / minikube", desc: "Real, disposable local Kubernetes clusters for testing", code: "kind create cluster --name test\nkubectl apply -f manifests/\nkind delete cluster --name test" },
+        { term: "kubeconform / conftest", desc: "Schema-validate manifests and enforce policy in CI", code: "kubeconform -strict manifests/*.yaml\nconftest test manifests/deploy.yaml -p policy/" },
+        { term: "Security context", desc: "Least-privilege defaults for every container", code: "securityContext:\n  runAsNonRoot: true\n  readOnlyRootFilesystem: true\n  allowPrivilegeEscalation: false" },
+        { term: "RBAC snippet", desc: "See the RBAC skill for the full Role/RoleBinding model", code: "kind: RoleBinding\nsubjects: [{ kind: ServiceAccount, name: api-sa }]\nroleRef: { kind: Role, name: pod-reader }" },
+        { term: "Prometheus scrape annotation", desc: "Expose metrics for Prometheus to collect", code: "metadata:\n  annotations:\n    prometheus.io/scrape: \"true\"\n    prometheus.io/port: \"8000\"" },
+        { term: "Terraform for cluster provisioning", desc: "Provision the VPC, node pools, and control plane as code", code: "resource \"aws_eks_cluster\" \"main\" { ... }  # see the Terraform skill" },
+        { term: "terminationGracePeriodSeconds", desc: "Time given to drain in-flight work on SIGTERM before SIGKILL", code: "spec:\n  terminationGracePeriodSeconds: 30" },
+      ],
+    },
+  ],
+};
+
+export default kubernetes;

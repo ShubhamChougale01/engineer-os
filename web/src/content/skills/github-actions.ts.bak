@@ -1,0 +1,1574 @@
+import type { SkillContent } from "../types";
+
+/**
+ * GitHub Actions — full 50-section knowledge page.
+ * Note: code blocks use ~~~ fences (CommonMark-equivalent to backtick fences)
+ * so this file needs no backtick escaping inside the template literals.
+ *
+ * GitHub Actions expression syntax normally looks like a dollar sign followed
+ * immediately by double curly braces, e.g. secrets.NAME or github.sha wrapped
+ * in that expression syntax. That exact character sequence breaks TypeScript
+ * template literals, so throughout this file such syntax is either escaped
+ * with a backslash before the dollar sign, or described in words inside a
+ * comment. Escaped occurrences are valid GitHub Actions YAML and safe inside
+ * a TS template literal.
+ */
+const githubActions: SkillContent = {
+  overview: `
+GitHub Actions is GitHub's native CI/CD (Continuous Integration / Continuous Delivery) platform: an event-driven automation engine that runs YAML-defined workflows directly inside the repository that triggers them. When code is pushed, a pull request is opened, a schedule fires, or someone clicks a button in the GitHub UI, GitHub spins up a fresh virtual machine (or container), checks out your code, and runs whatever sequence of steps you defined — tests, linting, building a Docker image, deploying to production, cutting a release, even posting a Slack message.
+
+For an AI engineer, GitHub Actions is usually the first piece of real infrastructure you touch that isn't your own laptop. Model training pipelines, eval suites, Docker image builds for inference servers, deployment of a FastAPI service to a cloud provider, and the release process for a Python package or an internal library all tend to live in dot-github-workflows YAML files. You do not need to run or maintain a CI server — GitHub hosts the runners for you — which is exactly why Actions is now the dominant CI/CD platform for anything already hosted on GitHub.
+
+Key characteristics: it is **event-driven** (workflows react to git and GitHub platform events, not just "run every night"), it is **YAML-configuration-as-code** version-controlled alongside the software it builds, it is **composable** through a public Marketplace of reusable "actions" (pre-built steps someone else wrote — checking out code, setting up a language runtime, logging into a cloud provider), and it runs on **ephemeral runners** — every job gets a brand-new machine that is destroyed afterward, which eliminates "works on my CI server" configuration drift.
+
+This page treats GitHub Actions as the concrete, GitHub-native implementation of CI/CD. For the platform-agnostic theory — what a pipeline is, why continuous integration exists, trunk-based development, deployment strategies — see the **CI/CD** skill; everything there applies here, expressed in GitHub's specific YAML dialect and runner model.
+`,
+
+  history: `
+GitHub Actions did not invent CI/CD — Jenkins, Travis CI, and CircleCI predate it by over a decade. It was GitHub's answer to a specific competitive and product problem: developers were already living inside GitHub for code review and issues, but had to configure a *separate* third-party CI service (Travis, CircleCI, Jenkins) with its own login, its own YAML dialect, and its own secrets store, just to run tests on a pull request.
+
+| Year | Milestone |
+|------|-----------|
+| 2018 | GitHub Actions announced at GitHub Universe, initially focused on general workflow automation (not just CI), including Docker-container-based actions |
+| 2019 | Actions rebuilt around YAML workflow files and hosted runners; opened to public beta for CI/CD use cases |
+| Nov 2019 | General availability. Runs on Linux, Windows, and macOS hosted runners |
+| 2019–2020 | The Marketplace grows rapidly; official actions/checkout, actions/setup-node, actions/setup-python become the standard building blocks |
+| 2020 | Self-hosted runners GA — teams could point Actions at their own machines for cost or network-access reasons |
+| 2021 | actions/cache GA; reusable workflows and composite actions introduced to cut copy-pasted YAML across repos |
+| 2021 | GitHub acquires npm; supply-chain security features (dependency review, CodeQL default setup) accelerate |
+| 2022 | OpenID Connect (OIDC) federation to AWS, Azure, and GCP GA — the beginning of the end for long-lived cloud access keys in CI |
+| 2023 | Concurrency groups, environment protection rules (required reviewers, wait timers), and artifact attestations mature |
+| 2024–2025 | Immutable actions and stronger SHA-pinning guidance following supply-chain incidents in the broader Actions ecosystem; continued hardening of pull_request_target guidance |
+
+The strategic logic: by owning both the code host and the CI runner, GitHub could make workflow authoring trivially easy (workflows live in the same repo, triggered by the same webhooks GitHub already fires for PRs and pushes) and could sell compute minutes as a product. That "it's just already there" property is the single biggest reason Actions overtook standalone CI services for GitHub-hosted projects — see the **Jenkins** skill for what came before and why some organizations still run it.
+`,
+
+  "why-it-exists": `
+Before GitHub Actions, the standard CI setup for an open-source or company project hosted on GitHub looked like this: push code to GitHub, then a webhook notifies a *separate* CI provider (Travis CI, CircleCI, AppVeyor, Jenkins), which pulls the code, runs a build defined in its own config file format, and posts a status back to GitHub as a commit status check. That worked, but it meant:
+
+- **Two systems, two logins, two billing relationships** — GitHub for code, a different vendor for CI, often a third for deployment.
+- **Config format lock-in** per provider — a .travis.yml did not transfer to CircleCI's config.yml.
+- **Secrets lived in a second dashboard**, widening the blast radius of who needed access to what.
+- **No first-class connection to GitHub-specific events** like "a pull request was labeled" or "an issue was opened" — those providers were CI tools, not general GitHub automation tools.
+
+GitHub Actions exists to collapse that into one system: the same platform that stores your code, reviews your pull requests, and tracks your issues also runs your automation, reacting natively to every event GitHub already knows about (not just pushes). The workflow file lives in the repo itself, versioned exactly like the code it tests — a workflow change and the code change that requires it ship in the same pull request and the same review.
+`,
+
+  "problem-it-solves": `
+GitHub Actions removes concrete, everyday pains:
+
+- **"Works on my machine" test drift** — every push or PR runs tests on a clean, reproducible, ephemeral machine instead of relying on a developer remembering to run the test suite locally.
+- **Manual, error-prone deployment** — a human typing deploy commands from a laptop is replaced by a scripted, auditable, repeatable job that runs the same way every time.
+- **Copy-pasted automation scripts** — anything a maintainer used to do by hand after merging a PR (cut a release, publish a package, build and push a Docker image, notify a channel) becomes declarative YAML triggered automatically.
+- **Disconnected CI and code review** — status checks (did tests pass?) appear directly on the pull request, and branch protection rules can require them before merge (see the Security and FAQs sections).
+- **Duplicated pipeline logic across many repositories** — composite actions and reusable workflows let an organization define a "how we build and deploy" pipeline once and call it from every service repo.
+
+What GitHub Actions deliberately does **not** solve:
+
+- It is not a general-purpose orchestration/scheduling system for long-running production workloads — it is not Airflow or a Kubernetes CronJob controller for your application's business logic; each job has a hard maximum runtime (currently 6 hours per job on standard runners) and workflows are meant to build, test, and deploy software, not run your production data pipeline forever.
+- It does not replace infrastructure-as-code tools like the **Terraform** skill — Actions can *invoke* terraform apply, but it isn't a state-management or provisioning engine itself.
+- It does not manage runtime container orchestration — that's the **Kubernetes** skill's job; Actions builds and ships the image, then hands off to the orchestrator.
+- It is not a secrets *manager* in the vault sense — GitHub encrypted secrets are a simple, workflow-scoped store, not a rotation/auditing system like the tools covered in the **Secrets Management** skill.
+`,
+
+  "learning-objectives": `
+By the end of this page you should be able to:
+
+1. Write a workflow YAML file from scratch: triggers, jobs, steps, and actions, placed correctly under dot-github-workflows.
+2. Explain the difference between GitHub-hosted and self-hosted runners and choose correctly based on cost, control, and private-network access needs.
+3. Build a multi-job pipeline with a job dependency (needs) and a matrix build across multiple language versions or operating systems.
+4. Use encrypted repository, organization, and environment secrets correctly, including environment protection rules that require a human approval before a deploy job runs.
+5. Speed up pipelines with actions/cache and reason about cache-hit-rate as a cost and time metric.
+6. Reduce duplicated YAML across repositories using composite actions and reusable workflows.
+7. Configure concurrency groups to cancel stale in-progress runs and explain why that saves real money.
+8. Set up OIDC federation from a workflow to AWS, Azure, or GCP so deployments use short-lived tokens instead of long-lived static cloud credentials.
+9. Identify and defend against GitHub Actions-specific attack surfaces: unpinned third-party actions, the pull_request_target privilege-escalation footgun, and overly broad GITHUB_TOKEN permissions.
+10. Wire CI status checks into branch protection so merges are gated on green builds.
+`,
+
+  prerequisites: `
+- **Required**: comfort with Git (branches, commits, pull requests — see the **Git** skill) and basic YAML syntax (indentation-sensitive key/value and list structures). You should know what a pull request is before this page is useful.
+- **Required**: the platform-agnostic CI/CD concepts — what a pipeline stage is, what "build once, deploy many" means, why fast feedback matters. Read the **CI/CD** skill first if these are new; this page assumes that vocabulary and shows GitHub's specific implementation of it.
+- **Helpful**: basic Docker familiarity (images, Dockerfile, registries) for the build-and-push-image sections — see the **Docker** skill.
+- **Helpful**: familiarity with at least one cloud provider (AWS, Azure, or GCP) for the OIDC deployment-credentials section.
+- **Not required**: any prior CI tool experience. If you've used Jenkins before, the **Jenkins** skill has an honest side-by-side comparison to translate your mental model.
+
+Dependency links: **Git** (triggers) → **CI/CD** (concepts) → this page (implementation) → **Docker** / **Kubernetes** / **Terraform** (what your workflows actually build and deploy) → **Secrets Management** (how credentials are handled properly).
+`,
+
+  "beginner-concepts": `
+### The anatomy of a workflow file
+
+Every GitHub Actions workflow is a YAML file living at .github/workflows/ in your repository root. GitHub watches that exact directory; any .yml or .yaml file there is a separate, independently triggered workflow.
+
+~~~yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -q
+~~~
+
+Reading this top to bottom is the whole mental model:
+
+- **name**: the human-readable label shown in the Actions tab.
+- **on**: the trigger — what event causes this workflow to run.
+- **jobs**: one or more independent units of work. Each job gets its own fresh virtual machine.
+- **runs-on**: which runner (operating system/environment) executes this job.
+- **steps**: an ordered list of commands or actions executed sequentially inside the job's runner.
+
+### Triggers (the "on" key)
+
+~~~yaml
+on:
+  push:
+    branches: [main, "release/*"]      # only these branches
+  pull_request:                        # any PR targeting the default branch config below
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * *"                # 3 AM UTC daily — cron syntax, UTC always
+  workflow_dispatch:                    # adds a "Run workflow" button in the UI
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+  release:
+    types: [published]
+~~~
+
+push fires on commits landing on matching branches; pull_request fires when a PR is opened/updated against the target branch (running against the merge of the PR branch into the base — an important nuance covered later); schedule runs on cron time, useful for nightly builds or dependency-freshness checks; workflow_dispatch lets a human trigger manually from the GitHub UI or API, often used for on-demand deploys.
+
+### Steps: run vs uses
+
+A step either runs a shell command (run:) or invokes a reusable **action** (uses:) — a packaged, shareable unit of automation published to the GitHub Marketplace or defined in any repository.
+
+~~~yaml
+steps:
+  - run: echo "Hello from a shell step"
+  - uses: actions/checkout@v4          # a Marketplace action, pinned to major version v4
+    with:
+      fetch-depth: 0                   # inputs passed to the action
+~~~
+
+actions/checkout is the near-universal first step of almost every job — without it, your job's runner starts with an empty filesystem and no access to your repository's files at all.
+
+### Jobs run in parallel by default
+
+~~~yaml
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps: [ ... ]
+  test:
+    runs-on: ubuntu-latest
+    steps: [ ... ]
+~~~
+
+Both lint and test start at the same time on two separate machines — there is no implicit ordering. Ordering must be declared explicitly with needs:, covered in Intermediate Concepts. This parallel-by-default behavior is why teams split CI into small, independent jobs: total wall-clock time is the length of the *longest* job, not the sum of all jobs.
+`,
+
+  "intermediate-concepts": `
+### Job dependencies with needs
+
+~~~yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "building..."
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "testing after build finished"
+
+  deploy:
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "deploying after both build and test succeed"
+~~~
+
+needs turns the default parallel graph into a DAG (directed acyclic graph). If build fails, test and deploy are skipped by default — GitHub Actions propagates failure through the dependency chain unless a step explicitly overrides it (see if: always() in Advanced Concepts).
+
+### Matrix builds
+
+A matrix runs the same job definition across a Cartesian product of variables — the classic use case is testing against multiple language versions and operating systems in parallel.
+
+~~~yaml
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+      fail-fast: false          # let all combinations finish even if one fails
+    runs-on: ${{ '{{' }} matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ '{{' }} matrix.python-version }}
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+~~~
+
+This one job definition expands into six independent parallel jobs (2 operating systems times 3 Python versions). fail-fast: false is a deliberate, common production choice: without it, GitHub cancels every other matrix combination the moment one fails, which hides whether the failure is version-specific or universal.
+
+### Building and pushing a Docker image
+
+~~~yaml
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ '{{' }} github.actor }}
+          password: ${{ '{{' }} secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ '{{' }} github.repository }}:${{ '{{' }} github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+~~~
+
+Note the tag uses the commit SHA (github.sha), not a mutable tag like "latest" — every build produces a uniquely addressable, immutable image, which is what lets a deploy step reference the exact artifact that was tested. See the **Docker** skill for image-building fundamentals this step depends on.
+
+### Contexts and expressions
+
+GitHub Actions exposes structured data through **contexts** — github, secrets, env, matrix, needs, steps — accessed with the double-curly-brace expression syntax shown above (backslash-escaped here only because of this page's TypeScript file format; in a real workflow file you type it directly, no backslash).
+
+~~~yaml
+steps:
+  - run: echo "Commit ${{ '{{' }} github.sha }} on branch ${{ '{{' }} github.ref_name }}"
+  - run: echo "Previous job set output: ${{ '{{' }} needs.build.outputs.image_tag }}"
+~~~
+
+Common contexts: github (event, repo, sha, actor, ref), env (environment variables), secrets (encrypted secrets, never printed to logs — GitHub automatically redacts secret values it recognizes in log output), matrix (current matrix combination), needs (outputs from upstream jobs), steps (outputs from earlier steps in the same job).
+
+### Passing data between steps and jobs
+
+~~~yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ '{{' }} steps.tag.outputs.tag }}
+    steps:
+      - id: tag
+        run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deploying image tagged ${{ '{{' }} needs.build.outputs.image_tag }}"
+~~~
+
+Writing to the special GITHUB_OUTPUT file (via a shell redirect) is how a step exposes a value; a job re-exposes a step's output at the job level via outputs: so downstream jobs (connected with needs) can read it.
+
+### Artifacts
+
+~~~yaml
+- name: Upload test report
+  uses: actions/upload-artifact@v4
+  with:
+    name: coverage-report
+    path: coverage.xml
+    retention-days: 14
+~~~
+
+Artifacts persist files produced by one job for download from the UI, or for another job in the same workflow run to consume with actions/download-artifact — the standard way to pass a build output (a wheel, a compiled binary, a coverage report) between jobs that each run on a completely separate, otherwise-isolated machine.
+`,
+
+  "advanced-concepts": `
+### Caching dependencies with actions/cache
+
+~~~yaml
+- name: Cache pip packages
+  uses: actions/cache@v4
+  with:
+    path: ~/.cache/pip
+    key: pip-${{ '{{' }} runner.os }}-${{ '{{' }} hashFiles('requirements.txt') }}
+    restore-keys: |
+      pip-${{ '{{' }} runner.os }}-
+~~~
+
+The key is hashed from the lockfile/requirements content: when dependencies don't change, the key matches and the cache is restored (a "cache hit") in seconds instead of re-downloading everything. restore-keys provides a fallback prefix match — a partial, slightly-stale cache is still far faster than none. **Cache-hit-rate matters directly for cost and time**: a large monorepo's CI might spend 60–70% of a job's wall-clock time on dependency installation without caching; on GitHub-hosted runners you are billed per minute, so a low hit rate is not just annoying, it is a recurring line item. Many popular setup actions (actions/setup-node, actions/setup-python) have a built-in cache: input that wraps actions/cache for the common case.
+
+### Composite actions — deduplicating steps within one repo
+
+A composite action bundles several steps into one reusable, named unit, defined in a local directory or a separate repository.
+
+~~~yaml
+# .github/actions/setup-and-test/action.yml
+name: "Setup and test"
+description: "Checkout, install deps, run tests"
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - run: pip install -r requirements.txt
+      shell: bash
+    - run: pytest -q
+      shell: bash
+~~~
+
+~~~yaml
+# used from a workflow
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/setup-and-test
+~~~
+
+Composite actions solve duplication **within a single repository or across a small, tightly-coupled set of repos** — every step defined once, referenced everywhere.
+
+### Reusable workflows — deduplicating whole pipelines across many repos
+
+Where composite actions reduce step duplication, **reusable workflows** reduce whole-pipeline duplication across an organization's many repositories.
+
+~~~yaml
+# .github/workflows/reusable-deploy.yml (in a central "shared" repo, or the same repo)
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+    secrets:
+      DEPLOY_TOKEN:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ '{{' }} inputs.environment }}
+    steps:
+      - run: echo "Deploying to ${{ '{{' }} inputs.environment }} with a provided token"
+~~~
+
+~~~yaml
+# in any consumer repo's workflow
+jobs:
+  call-deploy:
+    uses: my-org/shared-workflows/.github/workflows/reusable-deploy.yml@v1
+    with:
+      environment: production
+    secrets:
+      DEPLOY_TOKEN: ${{ '{{' }} secrets.PROD_DEPLOY_TOKEN }}
+~~~
+
+An organization with fifty microservice repositories can define "how we build, scan, and deploy" exactly once in a shared repo, version it (@v1), and have every service call it — when the deploy process changes, one PR updates behavior everywhere instead of fifty copy-pasted YAML files drifting apart.
+
+### Concurrency control
+
+~~~yaml
+concurrency:
+  group: ci-${{ '{{' }} github.workflow }}-${{ '{{' }} github.ref }}
+  cancel-in-progress: true
+~~~
+
+When a new commit lands on the same branch (same github.ref) while a previous run for that branch is still in progress, GitHub cancels the older, now-stale run instead of letting both run to completion. This matters for two reasons: **cost** — GitHub-hosted runner minutes are billed, so running a superseded, already-outdated commit's CI to completion is pure waste — and **speed** — developers see feedback on their latest push sooner because they aren't queued behind a run whose result no longer matters. A common pattern is to cancel-in-progress for CI on feature branches, but explicitly disable it (cancel-in-progress: false) for the deploy-to-production workflow, where an in-flight deployment should never be yanked mid-way.
+
+### OIDC federation to cloud providers — the modern secretless deployment pattern
+
+The traditional approach to letting a workflow deploy to AWS/Azure/GCP is to store a long-lived static access key as an encrypted secret. That key can leak (log output, a compromised action, a misconfigured print statement) and, until manually rotated or revoked, works forever, from anywhere.
+
+OpenID Connect (OIDC) federation replaces that with short-lived, per-run tokens: GitHub's OIDC provider issues a signed JSON Web Token unique to that specific workflow run, and the cloud provider is configured to trust GitHub's OIDC issuer and exchange that token for temporary cloud credentials — no static secret stored anywhere.
+
+~~~yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write     # required — grants this job permission to request an OIDC token
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/github-actions-deploy
+          aws-region: us-east-1
+      - run: aws s3 sync ./dist s3://my-prod-bucket
+~~~
+
+On the AWS side, an IAM role's trust policy is scoped to a specific GitHub repository and branch (or environment) using conditions on the token's claims (repo, ref, or environment name), so even if the OIDC token were somehow replayed, it cannot assume roles for other repositories. The credentials handed back are short-lived (typically an hour) and never touch GitHub's secret store at all. This is the single strongest senior-level upgrade a team can make to their deployment pipeline, and it works analogously for Azure (federated credentials on an App Registration) and GCP (Workload Identity Federation). See the **Secrets Management** skill for the broader principle of preferring short-lived, scoped credentials over static ones.
+
+### pull_request vs pull_request_target — and the privilege-escalation trap
+
+pull_request runs with a read-only GITHUB_TOKEN and no access to repository secrets when the PR comes from a fork — a deliberate safety boundary, because the workflow file itself, checked out from the fork's branch, could be attacker-controlled. pull_request_target is different: it runs using the workflow file **from the base branch** (trusted), but with write-level token permissions and full secrets access, while the "with a payload from the untrusted fork" event still triggers it. The classic footgun is checking out the *fork's* code inside a pull_request_target workflow and then running it (npm install running fork-controlled package.json scripts, or running fork-controlled test code) — that hands secrets and write access to attacker-supplied code. Full treatment in Security below.
+
+### Environment protection rules
+
+~~~yaml
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+    environment: production   # references an Environment configured in repo Settings
+    steps:
+      - run: ./deploy.sh
+~~~
+
+A GitHub "Environment" (configured in repository Settings → Environments) can require one or more human reviewers to approve before a job referencing it is allowed to proceed, enforce a wait timer, and restrict which branches may deploy to it — turning "anyone who can push to main can silently deploy to prod" into an auditable, gated approval step. Environment-scoped secrets (set inside a specific Environment rather than at the repository level) are only readable by jobs that declare that environment, so a staging-only credential is never even visible to a job deploying elsewhere.
+`,
+
+  "internal-working": `
+Understanding what actually happens between "you push a commit" and "a green checkmark appears" demystifies almost every debugging question you'll ever have about Actions.
+
+~~~mermaid
+flowchart TD
+    A["Developer pushes / opens PR"] --> B["GitHub webhook event fires\n(push, pull_request, etc.)"]
+    B --> C["Actions service matches event\nagainst on: triggers in workflow files"]
+    C --> D["Workflow run created\n(one run per matching workflow)"]
+    D --> E["Jobs graph resolved\n(parallel by default, needs: creates edges)"]
+    E --> F["Runner requested per job\n(GitHub-hosted VM provisioned, or\nself-hosted runner picks up the job)"]
+    F --> G["Fresh VM/container boots\n(Ubuntu/Windows/macOS image)"]
+    G --> H["Steps execute sequentially:\nactions downloaded + run, or shell commands run"]
+    H --> I["Logs streamed live to the Actions UI"]
+    I --> J["Job finishes: success / failure / cancelled"]
+    J --> K["Status posted back to the commit / PR\nas a check run"]
+    K --> L["VM destroyed — nothing persists\nunless uploaded as an artifact/cache"]
+~~~
+
+Step by step:
+
+1. **Event ingestion**: GitHub's internal event bus fires on essentially every action taken on the platform (a push, a PR state change, an issue comment, a schedule tick, a manual dispatch). The Actions service subscribes to these events.
+2. **Trigger matching**: for every workflow file in the repository, GitHub evaluates whether the incoming event matches that workflow's on: block (correct event type, correct branch/path filters). Multiple workflows can match the same event and all run independently.
+3. **Run creation and DAG resolution**: a workflow run is created, and its jobs are resolved into a dependency graph from the needs: keys. Jobs with no needs: start immediately; others wait for their dependencies to succeed.
+4. **Runner provisioning**: for a GitHub-hosted job, GitHub provisions a brand-new virtual machine from a maintained image (ubuntu-latest, windows-latest, macos-latest) — this is why every job starts with a completely clean filesystem and no leftover state from any previous run. For self-hosted, an already-running agent process on your own machine polls GitHub and picks up the queued job.
+5. **Step execution**: steps run strictly in order inside that one job's VM. A run: step is executed by the shell (bash by default on Linux/macOS, PowerShell on Windows); a uses: step downloads the referenced action's code (from the tag/SHA specified) and executes its defined entrypoint (a JavaScript action, a Docker container action, or a composite action's nested steps).
+6. **Log streaming and secret redaction**: output streams live to the Actions UI as it's produced; GitHub scans output for any string matching a registered secret value and masks it as asterisks before it's rendered or stored.
+7. **Status reporting**: the job's final state (success, failure, cancelled, skipped) is reported back to GitHub as a "check run" attached to the specific commit SHA — this is what appears as a checkmark or X on a pull request, and what branch protection rules evaluate.
+8. **Teardown**: the VM is destroyed. Nothing survives between runs except what you explicitly persisted via actions/cache (for the next run) or actions/upload-artifact (for download, or for another job in the same run).
+`,
+
+  architecture: `
+Two architectural pictures matter: how GitHub's runner infrastructure is organized, and how a real team should lay out workflows across their repositories.
+
+### Runner architecture
+
+~~~mermaid
+flowchart TB
+    subgraph GH["GitHub.com"]
+        EventBus["Event bus\n(push, PR, schedule, dispatch, ...)"]
+        ActionsSvc["Actions orchestration service"]
+        Marketplace["Actions Marketplace\n(published reusable actions)"]
+    end
+
+    subgraph Hosted["GitHub-hosted runners"]
+        H1["Fresh Ubuntu/Windows/macOS VM"]
+        H2["Fresh VM (per job)"]
+    end
+
+    subgraph SelfHosted["Self-hosted runners (your infrastructure)"]
+        S1["Runner agent on your VM/K8s pod"]
+        S2["Runner agent behind your VPC\n(access to private DB / internal APIs)"]
+    end
+
+    EventBus --> ActionsSvc
+    ActionsSvc -->|provisions per job| H1
+    ActionsSvc -->|provisions per job| H2
+    ActionsSvc -->|dispatches job to| S1
+    ActionsSvc -->|dispatches job to| S2
+    H1 & H2 & S1 & S2 -->|downloads| Marketplace
+    S2 -.private network access.-> InternalDB[("Internal database / VPC-only service")]
+~~~
+
+GitHub-hosted runners are fully managed, ephemeral, and have no route into your private network by default. Self-hosted runners are agent processes you install on machines you control (a VM, a Kubernetes pod, an on-prem box); GitHub's orchestration service dispatches jobs to them over an outbound connection the agent initiates, so no inbound firewall hole is needed — but the machine, its patching, and its capacity are entirely your responsibility.
+
+### Application/organization-level workflow layout
+
+A mature team's workflow structure typically separates concerns into distinct files rather than one giant workflow:
+
+~~~
+.github/
+├── workflows/
+│   ├── ci.yml                 # lint, test, type-check on every push/PR
+│   ├── build-image.yml        # build + push Docker image on merge to main
+│   ├── deploy-staging.yml     # auto-deploy on merge to main
+│   ├── deploy-production.yml  # manual dispatch or tag-triggered, environment-gated
+│   ├── release.yml            # triggered on release: published
+│   ├── scheduled-scan.yml     # nightly dependency/security scan
+│   └── reusable-deploy.yml    # workflow_call — shared by staging + production
+└── actions/
+    └── setup-and-test/        # local composite action, deduped across ci.yml jobs
+~~~
+
+Rule of thumb used by senior teams: keep fast feedback (lint/test) in its own workflow so it stays quick and cheap; separate deploy workflows so a failing nightly scan can never accidentally block or trigger a production deploy; centralize genuinely shared deploy logic in a reusable workflow referenced with @vN so every service's pipeline stays consistent and upgrades in one place.
+`,
+
+  "data-flow": `
+Tracing one push event end to end — from a developer's terminal to a deployed service — through trigger matching, a matrix build, and a gated deployment:
+
+~~~mermaid
+flowchart LR
+    Dev["git push origin main"] --> WH["GitHub webhook:\npush event on refs/heads/main"]
+    WH --> Match["Workflow engine matches\non: push: branches: [main]"]
+    Match --> Job1["Job: build\n(runs-on ubuntu-latest)"]
+    Job1 --> Matrix["Job: test\nstrategy.matrix:\npython 3.11 / 3.12 / 3.13"]
+    Matrix --> M1["Runner: py3.11"]
+    Matrix --> M2["Runner: py3.12"]
+    Matrix --> M3["Runner: py3.13"]
+    M1 & M2 & M3 --> Gate{"All matrix jobs\nsucceeded?"}
+    Gate -- no --> Fail["Workflow fails\nstatus check: red X on commit"]
+    Gate -- yes --> Docker["Job: build-and-push-image\ndocker/build-push-action\ntag = github.sha"]
+    Docker --> Registry[("ghcr.io image registry")]
+    Registry --> Deploy["Job: deploy\nenvironment: production\n(needs reviewer approval)"]
+    Deploy -- reviewer approves --> OIDC["OIDC token exchanged for\nshort-lived cloud credentials"]
+    OIDC --> Cloud["Cloud provider deploy\n(e.g. update ECS service / K8s rollout)"]
+    Cloud --> Status["Check run posted back to commit\nstatus check: green"]
+~~~
+
+Narrated: a push to main fires GitHub's webhook, which the Actions engine matches against every workflow's on: block. The build job runs first; a downstream matrix-based test job (declared with needs: build) fans out into three parallel runners, one per Python version. Only if every matrix combination succeeds does the pipeline proceed to build and push a Docker image tagged with the immutable commit SHA. The final deploy job references a protected environment: it pauses and waits for a human reviewer's approval, then exchanges a GitHub OIDC token for short-lived cloud credentials (no static secret involved) and performs the actual deploy. Every stage's pass/fail is reported back as a status check attached to that exact commit — which is what branch protection rules read when deciding whether a pull request is mergeable.
+`,
+
+  "production-usage": `
+### Real project layout
+
+Production teams keep workflows small and single-purpose rather than one monolithic pipeline: a fast ci.yml for lint/type-check/test that runs on every push and PR (feedback in minutes), separate build/deploy workflows gated on merges to main or on tag pushes, and scheduled workflows for maintenance (dependency scans, stale-issue cleanup, nightly integration tests against real external services).
+
+### Configuration defaults senior teams set explicitly
+
+~~~yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read       # least privilege by default — see Security
+
+concurrency:
+  group: ci-${{ '{{' }} github.workflow }}-${{ '{{' }} github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15   # never let a hung test suite burn runner minutes for hours
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - run: pytest -q --maxfail=1
+~~~
+
+Every one of these is a deliberate production default: explicit top-level permissions (least privilege), a concurrency group (cost control), and a per-job timeout-minutes (a hung process must not silently consume billed minutes indefinitely).
+
+### Operational conventions
+
+- **Naming**: workflow and job names describe what they verify (lint, unit-tests, integration-tests), not generic names like "build" that give no signal in a failure notification.
+- **Required status checks**: every meaningful job is registered as a required status check in branch protection (see FAQs) so merges cannot bypass a red build.
+- **Third-party actions pinned to a commit SHA** in anything security-sensitive (deploy workflows especially) — covered fully in Security.
+- **Billing awareness**: GitHub-hosted minutes are metered (with a free tier per plan) and multiplied by a per-OS-runner factor (Windows and macOS runners cost more minutes per wall-clock minute than Linux); teams watch Actions usage in billing settings and use concurrency + caching to keep spend predictable.
+`,
+
+  "industry-examples": `
+- **Microsoft** (GitHub's parent company) uses Actions extensively across its own open-source repositories (including VS Code and TypeScript), and is the primary maintainer investing in runner infrastructure, security hardening (artifact attestations, immutable actions), and OIDC federation to Azure.
+- **HashiCorp** runs Actions across many of its open-source tool repositories (Terraform providers, Vault plugins), using matrix builds to test provider code against many Terraform/Go versions simultaneously.
+- **Shopify** has published engineering writing on scaling their CI, including running large fleets of self-hosted runners to get faster, more powerful hardware than GitHub-hosted defaults provide, and to reach internal services from CI.
+- **Netflix** and other large streaming/tech companies use GitHub Actions for parts of their open-source tooling releases (public repos), while often using different systems (Spinnaker-style pipelines, internal tools) for internal production deployment — a good illustration that Actions is frequently one piece of a larger deployment story rather than the only tool.
+- **Countless individual open-source maintainers** (the long tail): the entire PyPI/npm ecosystem's "release a new version" workflow for a huge share of popular open-source packages is a GitHub Actions workflow triggered on a git tag push, running tests across a Python/Node version matrix and then publishing to a package registry — arguably Actions' single most common real-world use case.
+
+Pattern to notice: organizations already deeply invested in GitHub for code hosting adopt Actions for CI almost by default because the integration cost is near zero; the decision to add self-hosted runners specifically comes from either cost at scale or the need for CI jobs to reach private, VPC-only resources.
+`,
+
+  "best-practices": `
+1. **Pin third-party actions to a full commit SHA, not a tag**, for anything with write access or secrets — tags are mutable and can be repointed by a compromised or malicious maintainer; a SHA cannot. Comment the human-readable version next to the SHA for readability.
+2. **Set permissions explicitly, at the top of the workflow or per job, to the minimum required** — default to contents: read and add write scopes only to the specific job that needs them.
+3. **Never use pull_request_target to check out and execute untrusted fork code** — if you must run something against a fork's contents, use the plain pull_request trigger (no secrets, read-only token) or gate execution behind a maintainer's manual approval.
+4. **Use concurrency groups on every CI and staging-deploy workflow** to cancel superseded runs — near-free cost and speed win with no downside outside of production-deploy workflows.
+5. **Cache aggressively but key correctly** — hash the lockfile into the cache key so a stale cache is never silently served after a dependency change.
+6. **Set timeout-minutes on every job** — a hung step (a test waiting on a dead connection, an infinite retry loop) should fail fast, not burn budget for hours.
+7. **Use reusable workflows for anything duplicated across more than two or three repositories** — one update point beats N copy-pasted YAML files silently drifting.
+8. **Gate production deploys behind a GitHub Environment with required reviewers** — no direct path from "merge to main" to "live in production" without a deliberate human checkpoint for anything customer-facing.
+9. **Prefer OIDC federation over static cloud credentials** for every new cloud deployment integration — treat any new long-lived cloud secret in Actions as a decision that needs justification, not a default.
+10. **Tag build artifacts with the immutable commit SHA**, never with a mutable tag like "latest," so a deploy step always references an exact, reproducible build.
+11. **Keep fast-feedback CI and slow/expensive jobs in separate workflows** — don't let a nightly integration-test suite share a workflow (and thus a status-check requirement) with the two-minute unit-test job developers wait on for every push.
+12. **Fail loudly and specifically** — surface the real error in logs (uncensored except for actual secrets) rather than swallowing a step's failure and letting downstream steps run against a broken state.
+`,
+
+  "anti-patterns": `
+### Trusting a mutable tag for a security-sensitive third-party action
+
+~~~yaml
+# WRONG — a tag can be moved to point at different, possibly malicious code
+- uses: some-third-party/deploy-action@v2
+
+# RIGHT — pin to the exact commit; a SHA cannot be silently repointed
+- uses: some-third-party/deploy-action@a1b2c3d4e5f6...   # v2.3.1, verified 2026-06-01
+~~~
+
+### pull_request_target checking out fork code and running it
+
+~~~yaml
+# WRONG — grants secrets + write token to code from an untrusted fork
+on:
+  pull_request_target:
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ '{{' }} github.event.pull_request.head.sha }}   # fork's commit!
+      - run: npm install && npm test    # fork-controlled scripts run WITH secrets access
+
+# RIGHT — use pull_request for untrusted code (no secrets, read-only token),
+# or keep pull_request_target but never check out/execute the fork's contents,
+# only read metadata (labels, PR number) from the trusted event payload.
+on:
+  pull_request:
+jobs:
+  test:
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install && npm test
+~~~
+
+### Overly broad default permissions
+
+~~~yaml
+# WRONG — the implicit classic-repo default grants broad read/write scopes
+# to every job, whether it needs them or not
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps: [...]
+
+# RIGHT — declare least privilege explicitly at the top level, escalate per job only when needed
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps: [...]
+  release:
+    permissions:
+      contents: write   # only this job can push tags/releases
+    steps: [...]
+~~~
+
+### Other production-grade anti-patterns
+
+- **One giant workflow doing lint + test + build + deploy** — a failure in an unrelated matrix leg blocks or confuses an urgent deploy; split by concern.
+- **Hardcoding secrets in workflow YAML "just for now"** — anything committed to git history is compromised forever, even after deletion from the current file; use encrypted secrets from the start.
+- **No timeout-minutes**, letting a hung job silently burn runner minutes for hours.
+- **Deploying straight from a push to main with no environment gate** — no human checkpoint before customer-facing changes go live.
+- **Copy-pasting the same twelve steps into every repository's workflow** instead of a composite action or reusable workflow — a maintenance and consistency trap at scale.
+- **Ignoring cache-hit-rate** — a dependency-install step taking minutes on every single run because the cache key never matches (often because it's keyed on something that always changes, like the current date).
+`,
+
+  performance: `
+### Measure first
+
+The Actions UI itself is the first profiler: every job's page shows a per-step timing breakdown. For deeper analysis, GitHub's REST/GraphQL API can pull historical run durations across many runs to spot regressions, and third-party dashboards (or a simple scheduled workflow that queries the API and writes to a spreadsheet) can track trends over time.
+
+### The optimization hierarchy (apply in order)
+
+1. **Parallelize independent work into separate jobs.** Total pipeline time is bounded by the longest chain in the dependency graph, not the sum of all work — splitting lint/test/build into concurrent jobs (no needs: between them) is close to free wall-clock time.
+2. **Cache dependencies correctly.** A well-tuned actions/cache (or a setup action's built-in cache: input) commonly turns a multi-minute dependency-install step into single-digit seconds on a cache hit. Measure your actual hit rate — a cache that "exists" but almost never matches its key delivers none of this benefit.
+3. **Use a matrix only as wide as you need.** Testing every combination of 5 OSes times 6 language versions when you ship on one OS wastes runner minutes; narrow the matrix to what production actually needs, and use include/exclude to add or remove specific combinations rather than the full Cartesian product.
+4. **Trim what runs on every push.** Reserve the full matrix and slow integration suites for merges to main or a nightly schedule; run a fast, narrow subset (one OS, one language version) on every PR push for quick feedback.
+5. **Use Docker layer caching for image builds** (cache-from/cache-to: type=gha on docker/build-push-action) so an unchanged base layer or unchanged dependency layer isn't rebuilt from scratch every run.
+6. **Consider self-hosted or larger hosted runners for genuinely CPU/memory-heavy jobs** (large test suites, ML training steps) — standard GitHub-hosted runners have modest CPU/RAM; larger hosted runner tiers or self-hosted hardware can meaningfully cut wall-clock time for heavy jobs.
+7. **Fail fast inside a job**: put your quickest, most likely to fail checks (lint, type-check) before slow ones (full integration tests) within the same job, and use --maxfail=1-style flags in test runners so a broken build doesn't run every remaining test before reporting red.
+
+### Concrete numbers worth internalizing
+
+A cold dependency install (no cache) for a mid-sized Python or Node project commonly costs 30 seconds to several minutes; a cache hit typically drops that to single-digit seconds. Every job on a GitHub-hosted runner has a fixed provisioning overhead (tens of seconds) before your first step even begins — this is why very small, very numerous jobs can paradoxically be slower in total wall-clock time than fewer, slightly larger ones; balance parallelism against per-job startup overhead.
+`,
+
+  scalability: `
+GitHub Actions "scales" along two different axes: how many workflows/jobs an organization can run concurrently, and how a single pipeline handles a growing codebase.
+
+### Concurrency at the organization level
+
+~~~mermaid
+flowchart LR
+    Repo1["Repo A: push"] --> Q["Actions job queue"]
+    Repo2["Repo B: push"] --> Q
+    Repo3["Repo C: PR"] --> Q
+    Q --> Hosted["GitHub-hosted runner pool\n(shared capacity, concurrency limits per plan)"]
+    Q --> SelfHosted["Self-hosted runner pool\n(capacity you provision and scale)"]
+~~~
+
+GitHub-hosted runners are pooled and shared, with concurrent-job limits that scale with your GitHub plan; at high organizational scale (many teams, many repos, many simultaneous PRs), jobs can queue waiting for available runner capacity. Self-hosted runners let an organization provision exactly the capacity it needs (including autoscaling runner pools on Kubernetes or cloud VM groups that spin up on demand and scale to zero when idle), trading operational responsibility for control and often lower marginal cost at high volume.
+
+### Bottleneck table
+
+| Bottleneck | Answer |
+|------------|--------|
+| Runner queue wait time at high concurrency | Self-hosted autoscaling runner pool, or a higher-tier GitHub plan's concurrency limits |
+| Slow dependency installs at scale | Aggressive, correctly-keyed caching; consider a private package mirror/proxy |
+| A monorepo running the full suite on every unrelated change | Path filters (paths: in the on: trigger) so only affected packages' workflows run |
+| CI minutes cost growing with team size | Concurrency-group cancellation of stale runs, narrower per-PR matrices, self-hosted runners for heavy jobs |
+| Long-running heavy jobs (ML training, large builds) hitting the per-job time limit | Split into checkpointed stages, or run on self-hosted hardware sized for the workload |
+
+### Monorepo-specific scaling
+
+~~~yaml
+on:
+  push:
+    paths:
+      - "services/api/**"
+      - ".github/workflows/api-ci.yml"
+~~~
+
+Path filters prevent an unrelated change (documentation, an unrelated service) from triggering an expensive full pipeline — critical once a monorepo has enough independent services that "test everything on every push" stops being affordable in either time or cost.
+`,
+
+  security: `
+### Pin third-party actions to a commit SHA
+
+A tag reference (uses: some-action@v2) can be repointed by whoever controls that action's repository — including via a compromised maintainer account — to arbitrary code, which then runs with whatever permissions and secrets your job has. Pinning to a full commit SHA (uses: some-action@a1b2c3d...) makes the referenced code immutable regardless of what the tag later points to. This single practice would have mitigated several real supply-chain incidents in the broader Actions ecosystem. Official actions maintained directly by GitHub (actions/checkout, actions/setup-python, etc.) are lower risk but still benefit from SHA pinning in maximally sensitive workflows.
+
+### The pull_request_target privilege-escalation footgun
+
+Covered in Advanced Concepts and Anti-Patterns, this deserves repeating as the single most GitHub-Actions-specific vulnerability class: pull_request_target runs with write-level GITHUB_TOKEN permissions and full secrets access, using the *trusted* base-branch workflow file, but is triggered by an *untrusted* fork's pull request event. If that workflow then checks out and executes the fork's actual code (tests, install scripts, build scripts), an attacker's pull request can exfiltrate secrets or push malicious commits using your repository's own write access. Defense: use plain pull_request for anything that runs fork-supplied code (it gets a read-only token and no secrets for fork PRs by default), and if pull_request_target is genuinely needed (e.g., to post a comment back using a privileged token), never execute code from the fork's ref inside it.
+
+### Least-privilege GITHUB_TOKEN permissions
+
+The automatically-provisioned GITHUB_TOKEN historically defaulted to broad read/write scopes across an entire organization's classic settings. Declare permissions explicitly:
+
+~~~yaml
+permissions:
+  contents: read
+  pull-requests: write   # only if this job comments on PRs
+  id-token: write        # only if this job needs OIDC
+~~~
+
+Every scope not listed defaults to none — a job that only runs tests should need nothing beyond contents: read.
+
+### Secrets hygiene
+
+- Encrypted secrets (repository, organization, or environment-scoped) are never printed in logs — GitHub automatically masks any log output matching a registered secret's value — but a script that deliberately base64-encodes or otherwise transforms a secret before printing it can still leak it; never write code that manipulates a secret and prints the result.
+- Prefer OIDC federation (see Advanced Concepts) over any static, long-lived cloud credential stored as a secret — it removes an entire class of "leaked static key still works next year" risk.
+- Environment-scoped secrets plus required-reviewer protection rules ensure a production credential is inaccessible to any job that doesn't explicitly reference that environment, and that a human approves before it's used.
+- See the dedicated **Secrets Management** skill for the broader discipline (rotation, least-privilege scoping, vault-based dynamic secrets) that GitHub's simple encrypted-secrets store only partially covers.
+
+### Supply-chain and dependency scanning
+
+Enable Dependabot and/or CodeQL default setup for automated dependency-vulnerability and code-scanning alerts; treat any action from an unfamiliar publisher as unaudited code with write access to your CI environment until reviewed.
+`,
+
+  testing: `
+GitHub Actions workflows are themselves automation that benefits from testing, though the ecosystem here is younger and less standardized than application-level test frameworks.
+
+### Local iteration with act
+
+~~~bash
+# act runs your workflow YAML locally in Docker, useful for fast iteration
+# without pushing a commit for every YAML syntax tweak
+act push                     # simulate a push event
+act pull_request             # simulate a PR event
+act -j test                  # run only the "test" job
+~~~
+
+act is not a perfect emulator of GitHub's hosted environment (some contexts and hosted-runner-only behaviors differ), but it catches syntax errors and basic logic bugs far faster than the push-wait-check loop.
+
+### Testing composite actions and reusable workflows directly
+
+Because composite actions and reusable workflows are consumed by many callers, they deserve their own dedicated workflow that exercises them directly:
+
+~~~yaml
+# .github/workflows/test-composite-action.yml
+on:
+  pull_request:
+    paths:
+      - ".github/actions/setup-and-test/**"
+jobs:
+  self-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-and-test
+      - run: echo "composite action ran successfully"
+~~~
+
+### Validating YAML before it ever runs
+
+~~~bash
+# actionlint catches invalid expressions, unknown contexts, and shellcheck issues
+# in run: steps, without needing to trigger an actual workflow run
+actionlint .github/workflows/*.yml
+~~~
+
+### The senior testing doctrine for CI pipelines
+
+- Treat the pipeline itself as production code: a broken deploy workflow is an outage waiting to happen. Review workflow-file changes with the same scrutiny as application code.
+- Test the actual application code the pipeline builds using its normal test framework (pytest, jest, go test, etc.) — Actions orchestrates that, it doesn't replace it.
+- For deploy workflows specifically, test the deploy *script or tool* (Terraform plan output, a deployment script's dry-run mode) independent of the Actions YAML wrapping it, so failures are diagnosable at the right layer.
+- Use a staging environment and a staging-scoped workflow to exercise the exact same deploy path production uses, before it ever touches production secrets or infrastructure.
+`,
+
+  debugging: `
+### The toolbox, in escalation order
+
+1. **Read the step logs top to bottom in the Actions UI** — GitHub highlights the failing step and shows its full stdout/stderr; the actual error is usually near the bottom of that step's output.
+2. **Re-run with debug logging enabled.** Set the repository secrets ACTIONS_STEP_DEBUG and ACTIONS_RUNNER_DEBUG to true (as actual encrypted secrets, not plain variables) to get verbose, per-step diagnostic output including exactly which action version ran and what inputs it resolved.
+3. **Use the "Re-run jobs" → "Enable debug logging" checkbox** in the UI for a one-off verbose re-run without permanently setting the debug secrets.
+4. **tmate / SSH-into-runner debugging** for GitHub-hosted runners: a community action (mxschmitt/action-tmate is a well-known example) opens an SSH session into the live runner mid-job so you can poke around interactively — invaluable for "why does this only fail in CI, not locally" mysteries. Use only in private repos/trusted contexts, since it exposes a shell into the job's environment.
+5. **Print context objects deliberately** with toJSON() when an expression isn't evaluating as expected:
+
+~~~yaml
+- name: Debug the github context
+  run: echo '${{ '{{' }} toJSON(github) }}'
+~~~
+
+6. **Check the exact trigger conditions** first when a workflow simply "didn't run at all" — a branch filter, a path filter, or a typo in the event name (pull_request vs pull_request_target) silently means "no match," with no error anywhere.
+7. **Reproduce locally with act** (see Testing) to iterate on YAML syntax/logic without waiting on GitHub's queue.
+
+### Common "why didn't this run" causes
+
+- The workflow file has a YAML syntax error — GitHub silently skips workflows it cannot parse; check the Actions tab's workflow list for a warning icon.
+- A branches: or paths: filter didn't match the actual push.
+- The workflow was disabled manually in the Actions tab (a scheduled workflow is auto-disabled after 60 days of repository inactivity).
+- Secrets required by a called reusable workflow weren't passed through explicitly from the caller.
+`,
+
+  monitoring: `
+Production visibility for GitHub Actions pipelines rests on three things: run history, notifications, and programmatic metrics.
+
+### Built-in run history and insights
+
+The Actions tab retains history for every workflow run (duration, status, triggering actor/commit); organizations on GitHub Enterprise or with sufficient plan tiers get usage/insights dashboards breaking down minutes consumed by workflow, repository, and runner type — the first place to look when investigating a billing spike.
+
+### Notifications
+
+~~~yaml
+- name: Notify on failure
+  if: failure()
+  uses: slackapi/slack-github-action@v2
+  with:
+    payload: |
+      {
+        "text": "Deploy failed for ${{ '{{' }} github.repository }} at commit ${{ '{{' }} github.sha }}"
+      }
+  env:
+    SLACK_WEBHOOK_URL: ${{ '{{' }} secrets.SLACK_WEBHOOK_URL }}
+~~~
+
+Failure notifications for deploy and scheduled workflows specifically (not every CI run — that's noisy) routed to a team channel keep pipeline health visible without requiring anyone to check the Actions tab proactively.
+
+### Programmatic metrics via the API
+
+The REST and GraphQL APIs expose workflow run history (durations, conclusions, timestamps) that can be pulled on a schedule and pushed into an existing observability stack (Prometheus, Datadog, a simple time-series table) to track trends: median job duration over time, failure rate by workflow, cache-hit-rate over time.
+
+### What to actually track
+
+- **Failure rate per workflow** — a rising trend on a specific workflow points at flakiness worth fixing before it erodes trust in CI signal.
+- **Median and p95 duration per job** — regressions here are almost always a caching or dependency-growth problem, not a GitHub platform issue.
+- **Minutes consumed per repository/team** — the direct cost signal; ties back to concurrency-group and caching hygiene.
+- **Time-to-green on pull requests** — the metric that best reflects developer experience; the whole point of investing in the above.
+`,
+
+  deployment: `
+### A worked multi-job deploy pipeline
+
+~~~yaml
+name: Build, Test, and Deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ '{{' }} github.ref }}
+  cancel-in-progress: false   # never cancel an in-flight production deploy
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ '{{' }} matrix.python-version }}
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ '{{' }} steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ '{{' }} github.actor }}
+          password: ${{ '{{' }} secrets.GITHUB_TOKEN }}
+      - id: meta
+        run: echo "image=ghcr.io/${{ '{{' }} github.repository }}:${{ '{{' }} github.sha }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ '{{' }} steps.meta.outputs.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production   # requires reviewer approval, per repo Settings
+    permissions:
+      id-token: write         # OIDC for cloud login
+      contents: read
+    steps:
+      - name: Configure cloud credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/github-actions-deploy
+          aws-region: us-east-1
+      - name: Deploy new image
+        run: |
+          aws ecs update-service \\
+            --cluster prod-cluster \\
+            --service my-service \\
+            --force-new-deployment
+~~~
+
+Per-line justification: the test job matrices across supported Python versions before anything is built; build-and-push only runs once tests pass (needs: test) and emits the exact image reference as a job output so deploy references the precise artifact that was tested, never a mutable tag; deploy is gated behind the production environment (human approval required) and uses OIDC (id-token: write, no static AWS key anywhere) to obtain short-lived deploy credentials; concurrency with cancel-in-progress: false ensures a second push never yanks a production deploy mid-flight, unlike the CI job's own (separate) concurrency group which should cancel stale runs.
+
+### Serving/runtime topology note
+
+Actions builds and ships the artifact; it typically hands off to a separate runtime orchestrator — Kubernetes (see the **Kubernetes** skill), a managed container service, or a serverless platform — for actually running the deployed service. Actions is the pipeline, not the runtime.
+`,
+
+  "production-checklist": `
+Before a GitHub Actions pipeline is trusted with real deployments:
+
+- [ ] Every workflow declares explicit top-level permissions (least privilege), escalated per job only where needed
+- [ ] Every third-party action used in a deploy or secrets-bearing workflow is pinned to a full commit SHA
+- [ ] No workflow uses pull_request_target to check out and execute fork-controlled code
+- [ ] Production deploy jobs reference a GitHub Environment with required reviewers configured
+- [ ] Cloud deployment credentials use OIDC federation, not static long-lived secrets, wherever the provider supports it
+- [ ] Every job has a sensible timeout-minutes set
+- [ ] CI workflows use a concurrency group with cancel-in-progress: true; production-deploy workflows deliberately do not
+- [ ] Dependency caching (actions/cache or a setup action's built-in cache) is configured and its hit rate has been verified, not assumed
+- [ ] Docker images are tagged with the immutable commit SHA, never only "latest"
+- [ ] Required status checks are configured in branch protection for every meaningful CI job
+- [ ] Failure notifications are wired for deploy and scheduled workflows (not noisy for every CI run)
+- [ ] Secrets are scoped correctly (repository vs organization vs environment) and never printed or transformed-then-printed in logs
+- [ ] actionlint (or equivalent) runs in CI on changes to workflow files themselves
+- [ ] A documented rollback path exists (previous image SHA redeployable, or an automated rollback workflow)
+- [ ] Self-hosted runners (if used) are patched, network-scoped, and not shared across trust boundaries (e.g., a runner with prod-network access never also runs untrusted fork PR jobs)
+`,
+
+  "common-mistakes": `
+1. **Trusting a mutable action tag in a sensitive workflow** — a tag can be repointed to different code at any time; SHA-pin anything with write access or secrets.
+2. **Using pull_request_target to run fork-supplied code** — the single most GitHub-Actions-specific security mistake; covered repeatedly above because it recurs constantly in real incident writeups.
+3. **Forgetting that jobs run in parallel by default** — expecting implicit ordering without a needs: key, then being surprised when a deploy job races ahead of a test job.
+4. **Not setting concurrency groups**, letting every push queue a full, expensive pipeline run even when three commits land in quick succession — only the last one's result matters.
+5. **Tagging Docker images "latest" only** — makes it impossible to know or roll back to exactly what was tested; always include the immutable commit SHA.
+6. **Overlooking cache key correctness** — hashing the wrong file (or nothing) into the cache key so the cache silently never updates, serving stale dependencies, or silently never hits, wasting the time investment entirely.
+7. **Broad default GITHUB_TOKEN permissions** left unexamined — a workflow that only needs to read code and post a status still often runs with broader scopes than necessary if permissions: is never declared.
+8. **No timeout-minutes**, letting one hung test suite consume runner minutes for hours before anyone notices.
+9. **Storing a real secret directly in workflow YAML "temporarily"** — anything committed to git history remains recoverable indefinitely, even after later removal.
+10. **Copy-pasting the same 10–20 lines of setup steps into every workflow file** in a repo (or every repo in an org) instead of extracting a composite action or reusable workflow, guaranteeing drift the first time someone updates only one copy.
+`,
+
+  "common-errors": `
+| Error | Typical cause | Fix |
+|-------|---------------|-----|
+| Workflow does not trigger at all | Branch/path filter mismatch, YAML syntax error, or wrong event name | Check the Actions tab for parse warnings; verify on: filters against the actual push/PR |
+| "Resource not accessible by integration" | GITHUB_TOKEN lacks the permission the step needs | Add the specific scope under permissions: (e.g. pull-requests: write) |
+| Secrets not available in a job | Workflow triggered by pull_request from a fork (secrets withheld by design), or environment-scoped secret referenced without declaring environment: | Use pull_request_target carefully (see Security) only when justified, or declare the correct environment: |
+| Matrix job unexpectedly cancels siblings on first failure | fail-fast defaults to true | Set fail-fast: false if independent results per combination are wanted |
+| Cache never hits | Cache key includes something that changes every run (e.g., a timestamp), or hashFiles() points at the wrong file | Key on a stable lockfile/requirements hash; add restore-keys fallback |
+| "needs" job skipped even though earlier job passed | An unrelated job in the same needs: list failed or was skipped | Check every job listed in needs:; use if: always() deliberately if partial completion should still proceed |
+| Composite/reusable workflow can't find secrets | Secrets are not automatically inherited into called reusable workflows | Pass secrets explicitly under secrets: (or secrets: inherit if trusted and supported) in the caller |
+| OIDC role assumption fails ("not authorized") | Cloud-side trust policy conditions don't match the token's repo/branch/environment claims | Verify the IAM/Azure/GCP trust policy conditions exactly match the workflow's repo, ref, or environment |
+| Self-hosted runner job stuck "Waiting for a runner" | No matching self-hosted runner online, or label mismatch | Confirm runner is online and its labels match runs-on: exactly |
+
+The habit that matters: read the exact failing step's full log, then check permissions:, on:, and cache/secret scoping in that order — the overwhelming majority of Actions failures trace back to one of these three.
+`,
+
+  faqs: `
+**Q: Do I need self-hosted runners?**
+Only if you need to reach private network resources GitHub-hosted runners can't route to, need hardware GitHub-hosted tiers don't offer, or run enough volume that self-hosted becomes cheaper than metered minutes. Default to GitHub-hosted; it's zero-maintenance.
+
+**Q: What's the real difference between a composite action and a reusable workflow?**
+A composite action bundles steps and runs inside an existing job (it shares that job's runner); a reusable workflow defines entire jobs (with their own runs-on, potentially multiple jobs) and is invoked with uses: at the job level via workflow_call. Use composite actions to dedupe steps within a repo; use reusable workflows to dedupe whole pipelines across repos.
+
+**Q: How do required status checks and branch protection actually connect to Actions?**
+Every job's pass/fail is reported as a "check run" against the exact commit SHA. In repository Settings → Branches, a branch protection rule can require specific named checks to be green before a pull request is allowed to merge — this is the mechanism that makes "CI must pass" an enforced rule rather than a social convention.
+
+**Q: Should I use pull_request or pull_request_target?**
+Default to pull_request for anything that builds or tests the PR's actual code — it safely withholds secrets and write-level tokens for fork PRs. Only reach for pull_request_target for narrow tasks like labeling or commenting using a privileged token, and never let it check out and execute the fork's code.
+
+**Q: Is GitHub Actions "free"?**
+Public repositories get generous free minutes; private repositories get a metered free tier per plan, then billed per minute with a per-OS multiplier (Windows/macOS cost more minutes per wall-clock minute than Linux). Caching, concurrency cancellation, and narrow matrices are the direct levers to control that bill.
+
+**Q: How does this compare to Jenkins?**
+GitHub Actions trades Jenkins' near-total configurability and self-hosting for near-zero setup cost and native GitHub integration. See the **Jenkins** skill for a full honest comparison — many enterprises with existing Jenkins investment and complex on-prem requirements stay on Jenkins, while GitHub-native teams default to Actions.
+
+**Q: Can I trigger a workflow from another workflow, or from outside GitHub entirely?**
+Yes — the repository_dispatch and workflow_dispatch events allow triggering via the GitHub API from an external system or from another workflow, useful for chaining pipelines across repositories or integrating with non-GitHub systems.
+`,
+
+  "interview-questions": `
+**Junior/Mid:**
+
+1. *What is a GitHub Actions workflow, and where does it live?* A YAML file in .github/workflows/ in a repository defining triggers, jobs, and steps; each matching event creates an independent workflow run.
+2. *What's the difference between run: and uses: in a step?* run: executes a shell command directly; uses: invokes a reusable, packaged action (from the Marketplace, another repo, or locally).
+3. *Do jobs in the same workflow run in order?* No — parallel by default; needs: creates an explicit dependency edge, forming a DAG.
+4. *What is a matrix build?* A strategy.matrix expands one job definition into a Cartesian product of parallel jobs across the listed variable combinations (e.g., OS times language version).
+5. *How would you share a value computed in one job with a later job?* Write it to GITHUB_OUTPUT in a step, expose it via the job's outputs:, then read it from the downstream job with needs.<job>.outputs.<name>.
+
+**Senior:**
+
+6. *Explain the pull_request_target privilege-escalation risk in detail.* It runs the trusted base-branch workflow file with write-scope token and full secrets access, but is triggered by an untrusted fork's PR event; checking out and executing the fork's actual code inside it hands secrets/write access to attacker-controlled code. Fix: use pull_request for anything executing fork code; never check out the fork ref in pull_request_target.
+7. *Why is SHA-pinning third-party actions considered a security requirement, not a nicety?* A version tag is mutable and can be repointed by a compromised or malicious maintainer to different code at any time; a full commit SHA is immutable, so pinning to it guarantees the exact reviewed code always runs.
+8. *Walk through how OIDC federation to AWS eliminates static cloud credentials.* GitHub's OIDC provider issues a signed, short-lived token unique to the run; the cloud provider's IAM role trust policy is scoped to specific repo/branch/environment claims and exchanges that token for temporary credentials — no static access key is ever stored as a secret, and the credential expires quickly even if somehow exposed.
+9. *When would you choose a composite action versus a reusable workflow?* Composite action for deduping steps within one job/repo (or a tightly coupled set); reusable workflow for deduping entire multi-job pipelines across many repositories, versioned and called via workflow_call.
+10. *How do you control CI cost at scale?* Concurrency groups to cancel superseded runs, correctly-keyed dependency caching, narrowing matrices to what's actually shipped, path filters in monorepos, and considering self-hosted runners once volume justifies the operational cost.
+11. *Why does GITHUB_TOKEN sometimes fail with "Resource not accessible by integration"?* The token's declared permissions: scope doesn't include the operation the step is attempting; fix by adding the specific scope, not by widening permissions blanket-style.
+12. *Design a production deploy pipeline for a containerized service with a required approval gate.* Test job(s) → build-and-push job tagging the image with the commit SHA → deploy job referencing a GitHub Environment with required reviewers, using OIDC to obtain deploy credentials, with concurrency configured to never cancel an in-flight deploy.
+`,
+
+  "coding-questions": `
+### 1. Write a workflow that only runs the full test matrix on merges to main, and a narrow subset on every PR push
+
+~~~yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Full matrix on main; narrowed via a conditional job below for PRs
+        python-version: ${{ '{{' }} github.event_name == 'push' && fromJSON('["3.11","3.12","3.13"]') || fromJSON('["3.12"]') }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ '{{' }} matrix.python-version }}
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+~~~
+
+The trick is using fromJSON() with a conditional expression to select a different matrix array depending on github.event_name — PRs get fast feedback on one version; main gets the full compatibility sweep. Follow-up: how would you additionally skip this workflow entirely for documentation-only changes? (Answer: add a paths-ignore: filter for docs/** to the on: block.)
+
+### 2. Design a reusable workflow for "build, scan, and push a Docker image" callable from any service repo with a required image name input
+
+~~~yaml
+# shared-workflows/.github/workflows/build-scan-push.yml
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        required: true
+        type: string
+    secrets:
+      REGISTRY_TOKEN:
+        required: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ '{{' }} github.actor }}
+          password: ${{ '{{' }} secrets.REGISTRY_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false          # build first, don't push until scan passes
+          tags: ghcr.io/${{ '{{' }} inputs.image_name }}:${{ '{{' }} github.sha }}
+          outputs: type=docker,dest=/tmp/image.tar
+      - name: Load and scan image
+        run: |
+          docker load -i /tmp/image.tar
+          # placeholder for a real scanner, e.g. trivy image ...:tag
+          echo "scanning ghcr.io/${{ '{{' }} inputs.image_name }}:${{ '{{' }} github.sha }}"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ '{{' }} inputs.image_name }}:${{ '{{' }} github.sha }}
+~~~
+
+Complexity/design discussion: building once, scanning the loaded image before ever pushing, only then pushing — versus building twice (simpler YAML, wastes build time). Follow-up: how would a caller pass its own registry secret through? (secrets: block on the workflow_call trigger, explicitly forwarded from the caller's secrets: block.)
+
+### 3. Given a flaky matrix job, design a retry mechanism without retrying the entire pipeline
+
+~~~yaml
+- name: Run tests with retry on transient failure
+  uses: nick-invision/retry@v3
+  with:
+    timeout_minutes: 5
+    max_attempts: 3
+    command: pytest -q
+~~~
+
+Discussion points: retrying an entire job/workflow hides real flakiness and wastes minutes; retrying only the specific flaky command (via a small wrapper action, or a shell loop) is more targeted. The senior answer also flags that retries are a stopgap — the real fix is finding and removing the source of flakiness (shared test state, network-dependent tests without mocking, race conditions), and that retries should never be applied to a step whose failure indicates a real code regression rather than transient infrastructure noise.
+`,
+
+  "hands-on-labs": `
+### Lab 1 — Your first CI workflow (beginner, ~1h)
+Create a small Python or Node repository, add a .github/workflows/ci.yml that triggers on push and pull_request, checks out code, sets up the language runtime, installs dependencies, and runs the test suite. Push a failing test on purpose and observe the red X on the commit; fix it and watch it turn green. Skills: triggers, steps, actions/checkout, reading job logs.
+
+### Lab 2 — Matrix build plus dependency caching (intermediate, ~1.5h)
+Extend Lab 1's workflow with a strategy.matrix across three language versions and two operating systems, then add actions/cache keyed on your lockfile hash. Time the pipeline before and after caching (make a trivial commit twice) and record the difference. Skills: matrix builds, fail-fast, cache keys and restore-keys, reading timing from the Actions UI.
+
+### Lab 3 — Build, push, and deploy with an environment gate (advanced, ~3h)
+Add a multi-job workflow: test → build-and-push a Docker image to GitHub Container Registry tagged with the commit SHA → deploy job referencing a GitHub Environment you configure with a required reviewer. Trigger a deploy, approve it as the reviewer, and confirm the deploy step only executes after approval. Skills: needs:, job outputs, docker/build-push-action, environment protection rules.
+
+### Lab 4 — OIDC-based cloud deployment, reusable workflow, and cost controls (production, ~4h)
+Configure OIDC federation from a workflow to a cloud provider of your choice (AWS/Azure/GCP free tier), replacing any static access key with a federated role/identity. Extract your build-and-push logic into a reusable workflow callable with workflow_call, and add a concurrency group with cancel-in-progress: true to the CI workflow. Deliverable: a short README explaining what OIDC eliminated (the static secret) and measured evidence the concurrency group actually cancels a superseded run (two rapid pushes, screenshot of the cancelled run). Skills: the entire advanced/production section, end to end.
+`,
+
+  "real-projects": `
+Portfolio-grade projects (each maps to skills employers screen for):
+
+1. **A full CI/CD pipeline for a containerized FastAPI service** — test matrix across Python versions, Docker build with GHA layer caching, push to GHCR tagged by SHA, OIDC-based deploy to a cloud provider gated behind a production Environment with required reviewers, Slack notification on deploy failure. Demonstrates: the complete pipeline this page teaches, in one real repository other engineers can review.
+
+2. **An organization-wide reusable workflow library** — a shared repository exposing versioned reusable workflows (build-scan-push, deploy-with-approval, run-tests-matrix) plus a composite action for common setup steps, consumed by three or four sample "service" repositories. Demonstrates: organizational thinking about CI/CD consistency and maintainability at scale, not just a single pipeline.
+
+3. **A security-hardened Actions template repository** — a GitHub template repo where every third-party action is SHA-pinned with a documented version comment, permissions: is minimal and explicit in every job, pull_request (never pull_request_target) is used for untrusted code, OIDC is pre-wired for the major cloud providers, and a README documents every security decision made and why. Demonstrates: the security posture senior teams expect, packaged as something other engineers can adopt directly.
+
+Each project: workflow files reviewed for least-privilege permissions, a documented rollback story, and a short written explanation of every non-obvious YAML decision (why this trigger, why this concurrency setting) — the reasoning is what differentiates a senior-level submission from a working-but-unexplained one.
+`,
+
+  "case-studies": `
+### The pull_request_target incidents across the open-source ecosystem
+Multiple widely-used open-source projects have, at various points, shipped workflows using pull_request_target that checked out and executed a fork's pull request code with full write-token and secrets access — allowing a malicious PR to exfiltrate secrets or push unauthorized changes. Lesson: this is not a theoretical footgun; it is one of the most commonly rediscovered real vulnerabilities in the Actions ecosystem, and it is entirely preventable by understanding the trust boundary the trigger creates.
+
+### Third-party action supply-chain compromises
+The Actions Marketplace's core strength — anyone can publish a reusable action — is also its core supply-chain risk. Incidents where a popular action's repository or maintainer account was compromised, and the action's tag was repointed to malicious code, have affected downstream workflows still referencing that tag. Lesson: mutable version tags are a trust assumption, not a security boundary; SHA-pinning converts "I trust this maintainer forever" into "I trust this exact, reviewed code."
+
+### The industry-wide shift to OIDC federation
+As static cloud access keys stored as CI secrets became a recurring root cause in cloud security incidents (leaked via logs, compromised dependencies, or overly broad IAM policies attached to a "just get CI working" key), the move to OIDC federation across GitHub Actions, GitLab CI, and other CI platforms reflects a broader industry lesson: the safest secret is the one that doesn't exist. Short-lived, narrowly-scoped, automatically-expiring credentials close an entire class of long-tail risk that no amount of secret rotation discipline fully solves for static keys.
+
+### Large-scale monorepo teams adopting path filters and self-hosted runners
+Organizations running very large monorepos on GitHub Actions have publicly described hitting real scaling pain — every push triggering full-repository pipelines regardless of what actually changed, and GitHub-hosted runner queueing under high concurrent load. The consistent lesson across these stories: path filters (paths:/paths-ignore:) and self-hosted, often autoscaling, runner pools are not premature optimization once an organization crosses a real concurrency and cost threshold — they become necessary infrastructure.
+`,
+
+  comparisons: `
+| Dimension | GitHub Actions | Jenkins | CircleCI | GitLab CI | Buildkite |
+|-----------|----------------|---------|----------|-----------|-----------|
+| Hosting model | GitHub-hosted (managed) or self-hosted | Self-hosted (you run the server) | Cloud-hosted or self-hosted runners | Cloud-hosted (GitLab.com) or self-hosted | Self-hosted runners always; managed control plane |
+| Config format | YAML in the repo | Groovy Jenkinsfile (or classic UI jobs) | YAML | YAML | YAML or scripts |
+| Native code-host integration | Deepest — same platform as GitHub code/PRs | None built-in; plugin-based integration with any host | Good, via webhooks/integration | Deepest if using GitLab as the code host too | Good, via webhooks |
+| Plugin/action ecosystem | Marketplace of community + official actions | Enormous plugin ecosystem (oldest, most mature) | Orbs (similar concept) | Built-in templates + includes | Plugins, smaller ecosystem |
+| Setup/maintenance cost | Near zero for hosted runners | High — you own the server, plugins, upgrades | Low (managed) | Low (managed) if using GitLab.com | Moderate — you always run the agent |
+| Best fit | Teams already on GitHub wanting native, low-maintenance CI/CD | Complex on-prem requirements, deep legacy plugin needs, full control | Teams wanting a dedicated, polished CI-only product | Teams standardized on GitLab end to end | Teams wanting full control of runner infrastructure with a lighter server |
+
+**How seniors choose**: if the code already lives on GitHub, Actions is the default — the integration cost of anything else is a real, ongoing tax with no corresponding benefit for most teams. Jenkins remains justified for organizations with heavy on-prem infrastructure, deeply customized legacy pipelines, or plugin requirements Actions can't match (see the **Jenkins** skill for the full honest comparison). GitLab CI is the natural choice if GitLab is already the code host. CircleCI/Buildkite get chosen when a team wants a CI-specialist product decoupled from their code host, often for very large or very custom build-infrastructure needs.
+`,
+
+  "related-technologies": `
+- **CI/CD** — the platform-agnostic concepts (pipelines, stages, deployment strategies) that GitHub Actions implements concretely; read that skill first if the vocabulary here felt unfamiliar.
+- **Jenkins** — the classic self-hosted CI server; the natural comparison point and still common in enterprises with existing on-prem investment.
+- **Git** — workflows trigger on git events (push, tag, pull request); understanding git's model of branches, refs, and merges is prerequisite to correctly scoping triggers.
+- **Docker** — the near-universal build target of a "build and push image" job; the **Docker** skill covers image layers, multi-stage builds, and registries that Actions workflows orchestrate.
+- **Kubernetes** — the common deployment target once an image is built and pushed; Actions typically hands off to kubectl apply, a Helm chart, or a GitOps controller rather than managing runtime orchestration itself.
+- **Terraform** — infrastructure-as-code often invoked from within a workflow (terraform plan/apply as a job step) rather than replaced by it.
+- **Secrets Management** — the deeper discipline (rotation, dynamic secrets, vaults) that GitHub's simple encrypted-secrets store only partially replicates; essential context for anything beyond the basics.
+- **AWS / Azure / GCP** — the OIDC federation pattern is specific to whichever provider a team deploys to; each has its own trust-policy configuration syntax covered in their respective skills.
+
+On this platform, the natural learning path: **Git** → **CI/CD** → **GitHub Actions** (this page) → **Docker** → **Kubernetes**/**Terraform** → **Secrets Management**.
+`,
+
+  "latest-updates": `
+Verified against my knowledge through early-to-mid 2025 — check the GitHub Changelog (github.blog/changelog) for anything newer, since Actions ships incremental platform changes frequently.
+
+- **Artifact attestations and immutable actions**: GitHub has continued hardening the supply-chain story — build provenance attestations for artifacts, and movement toward immutability guarantees for actions to reduce the "tag was repointed" risk class discussed in Security.
+- **OIDC federation maturity**: OIDC-based deployment to AWS, Azure, and GCP is now the documented, recommended default in GitHub's own guidance rather than a niche advanced technique — expect this framing to keep strengthening.
+- **Larger and more varied hosted runner options**: GitHub has expanded hosted runner size/hardware options (larger CPU/RAM tiers, ARM-based runners) beyond the original small default Linux/Windows/macOS runners, narrowing the gap with self-hosted for heavy workloads.
+- **Continued pull_request_target guidance updates**: GitHub's own documentation and security advisories have repeatedly reinforced the checkout-of-fork-code warning as real incidents keep recurring across the open-source ecosystem.
+- **Ecosystem tools maturing**: actionlint and act have both become close to standard tooling for local validation and iteration, referenced directly in this page's Testing section.
+
+Given how frequently GitHub ships incremental Actions changes, treat any specific version number, exact pricing figure, or runner specification in this page as approximate — verify against the current GitHub documentation before relying on it for a production decision.
+`,
+
+  "future-roadmap": `
+Where GitHub Actions appears to be heading, and what's worth investing career time in:
+
+1. **Secretless deployment becomes the default expectation.** OIDC federation to cloud providers is likely to keep displacing static credentials as the assumed-correct pattern industry-wide, not just a GitHub-specific best practice — this is one of the highest-leverage skills on this page to master deeply now.
+2. **Supply-chain hardening keeps tightening.** Expect continued push toward immutable, verifiable actions (attestations, provenance, possibly stronger enforcement around SHA-pinning or signed actions) as the Marketplace's trust model matures in response to recurring real-world incidents.
+3. **Runner flexibility keeps expanding.** Larger, more specialized hosted runner tiers (more RAM/CPU options, GPU runners for ML workloads, more architectures) will continue narrowing the reasons teams reach for self-hosted infrastructure, though private-network access needs will always justify self-hosted for some workloads.
+4. **Reusable workflows and composite actions keep consolidating organizational pipelines.** As organizations mature, expect fewer bespoke per-repo pipelines and more centrally-maintained, versioned shared workflow libraries — the pattern shown in this page's Advanced Concepts section.
+5. **Tighter integration with GitHub's broader platform** (security advisories, dependency graph, code scanning) will likely deepen, making Actions less a standalone CI tool and more the automation backbone across GitHub's entire security and developer-experience surface.
+
+For your career: bet on OIDC/secretless deployment patterns, least-privilege permission modeling, and reusable-workflow architecture — these three separate "wrote a workflow that works" from "designed CI/CD an organization can trust and scale."
+`,
+
+  "cheat-sheet": `
+~~~yaml
+# --- Minimal workflow skeleton ---
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: "pip" }
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+
+# --- Triggers ---
+# push, pull_request, schedule (cron, UTC), workflow_dispatch (manual + inputs),
+# release, workflow_call (reusable), repository_dispatch (external trigger)
+
+# --- Job dependency + matrix ---
+jobs:
+  test:
+    strategy:
+      matrix: { os: [ubuntu-latest, windows-latest], version: ["3.11", "3.12"] }
+      fail-fast: false
+    runs-on: <matrix.os>
+  deploy:
+    needs: [build, test]
+
+# --- Caching (key on the lockfile hash) ---
+- uses: actions/cache@v4
+  with:
+    path: ~/.cache/pip
+    key: pip-<runner.os>-<hashFiles('requirements.txt')>
+    restore-keys: pip-<runner.os>-
+
+# --- Concurrency (cancel superseded CI runs) ---
+concurrency:
+  group: ci-<github.workflow>-<github.ref>
+  cancel-in-progress: true       # false for production-deploy workflows
+
+# --- Environment gate (required reviewers) ---
+jobs:
+  deploy:
+    environment: production      # configured in repo Settings > Environments
+
+# --- OIDC to a cloud provider (no static keys) ---
+permissions:
+  id-token: write
+steps:
+  - uses: aws-actions/configure-aws-credentials@v4
+    with: { role-to-assume: "arn:aws:iam::ACCOUNT:role/deploy-role", aws-region: "us-east-1" }
+
+# --- Composite action (dedupe steps in one repo) ---
+# .github/actions/setup/action.yml -> runs: { using: composite, steps: [...] }
+# used as: - uses: ./.github/actions/setup
+
+# --- Reusable workflow (dedupe whole pipelines across repos) ---
+# callee: on: { workflow_call: { inputs: {...}, secrets: {...} } }
+# caller: jobs: { call: { uses: org/repo/.github/workflows/x.yml@v1, with: {...} } }
+
+# --- Security musts ---
+# Pin third-party actions to a full commit SHA, not a tag
+# Never checkout+execute fork code inside pull_request_target
+# Declare permissions: explicitly; default contents: read
+# Secrets: repo / org / environment-scoped; never print or transform-then-print
+~~~
+`,
+
+  "flash-cards": `
+| Front | Back |
+|-------|------|
+| Where do workflow files live? | .github/workflows/*.yml in the repository |
+| Do jobs run in order by default? | No — parallel by default; needs: creates an explicit dependency |
+| What does a matrix build do? | Expands one job into a Cartesian product of parallel jobs across variables |
+| GitHub-hosted vs self-hosted runner? | Managed ephemeral VM, no private network access vs your own machine, full control, private network reachable |
+| What does actions/cache key on? | Typically a hash of the lockfile/requirements so a dependency change invalidates the cache correctly |
+| Composite action vs reusable workflow? | Steps within one job/repo vs whole jobs/pipelines callable across repos via workflow_call |
+| What does a concurrency group with cancel-in-progress do? | Cancels a stale in-progress run when a newer commit lands on the same ref — saves time and cost |
+| Why prefer OIDC over static cloud keys? | Short-lived, per-run, scoped tokens exchanged at runtime — no long-lived secret to leak or rotate |
+| Why pin actions to a SHA, not a tag? | Tags are mutable and can be repointed to different code; a SHA is immutable |
+| What's dangerous about pull_request_target? | Runs with write-token + secrets access on an untrusted fork's event; checking out/executing fork code hands it that access |
+| What does an Environment's required reviewer do? | Pauses a job referencing that environment until a designated human approves |
+| What connects CI results to "can this PR merge"? | Branch protection's required status checks, which read the check runs Actions posts per commit |
+| What's the default permission philosophy senior teams use? | Explicit least privilege: contents: read by default, escalate only the specific job that needs more |
+| What happens to a runner's filesystem after a job? | The VM is destroyed — nothing persists except cache/artifacts you explicitly uploaded |
+| What's the platform-agnostic skill to read before this one? | CI/CD — covers pipeline concepts this page implements in GitHub's YAML dialect |
+`,
+
+  mcqs: `
+**1. Two jobs with no needs: key between them will:**
+
+A) Run in the order they're written  B) Run in parallel  C) Fail the workflow  D) Require manual approval
+
+**Answer: B** — jobs are parallel by default; needs: is required to create ordering.
+
+**2. Which trigger withholds secrets and gives a read-only token when a PR comes from a fork?**
+
+A) pull_request_target  B) pull_request  C) workflow_dispatch  D) push
+
+**Answer: B** — pull_request is the safe default for untrusted fork code; pull_request_target grants write-scope token and secrets even for fork-triggered events.
+
+**3. Why pin a third-party action to a commit SHA instead of a version tag?**
+
+A) SHAs run faster  B) Tags don't support inputs  C) A tag can be repointed to different code later; a SHA is immutable  D) SHAs are required by GitHub Marketplace policy
+
+**Answer: C** — this is the core supply-chain security reason.
+
+**4. What does an actions/cache key typically hash to determine a cache hit?**
+
+A) The current date  B) The runner's IP address  C) The lockfile/requirements file contents  D) The job's name
+
+**Answer: C** — hashing dependency-defining files ensures the cache invalidates exactly when dependencies actually change.
+
+**5. What does OIDC federation to a cloud provider primarily eliminate?**
+
+A) The need for a Dockerfile  B) The need to run tests before deploying  C) The need to store a long-lived static cloud access key as a secret  D) The need for a deploy job at all
+
+**Answer: C** — short-lived tokens are exchanged per run instead of a static key sitting in secrets indefinitely.
+
+**6. A concurrency group with cancel-in-progress: true on a CI workflow, when a second commit lands on the same branch mid-run, will:**
+
+A) Queue the second run behind the first  B) Cancel the first (now-stale) run and run the second  C) Run both fully in parallel  D) Fail both runs
+
+**Answer: B** — the newer commit's result is what matters; the superseded run is cancelled to save time and cost.
+`,
+
+  "revision-notes": `
+**Core model in 5 lines:** A workflow is YAML in .github/workflows/, triggered by an event (push, pull_request, schedule, workflow_dispatch, and more). It contains jobs (parallel by default, ordered via needs:), each running on a fresh runner (GitHub-hosted or self-hosted). Jobs contain steps, which either run: a shell command or uses: a packaged action. Everything about the pipeline — its config and its history — lives alongside the code it builds.
+
+**Speed and cost in 4 lines:** actions/cache keyed on a lockfile hash turns dependency installs from minutes into seconds — track hit rate, don't assume it. Matrix builds fan a job out across variable combinations; keep them only as wide as production needs. Concurrency groups with cancel-in-progress cancel stale runs on new pushes — near-free savings on CI, but deliberately disabled on production-deploy workflows. GitHub-hosted minutes are metered; self-hosted trades maintenance for control and often lower marginal cost at scale.
+
+**Reuse in 3 lines:** Composite actions dedupe steps within a repo. Reusable workflows (workflow_call) dedupe entire pipelines across many repos, versioned and centrally updated. Both exist specifically to stop copy-pasted YAML from drifting.
+
+**Security in 6 lines:** Pin third-party actions to a commit SHA, never a mutable tag. Never let pull_request_target check out and execute a fork's actual code — it runs with write-token and secrets access on an untrusted trigger. Declare permissions: explicitly; default to contents: read and escalate per job only as needed. Prefer OIDC federation over static cloud keys for deployment credentials. Gate production deploys behind Environments with required reviewers and environment-scoped secrets. Never print or transform-then-print a secret in logs.
+
+**Ties to merge/deploy in 2 lines:** Every job's outcome is posted as a check run on the exact commit; branch protection's required status checks read those to gate merges. Deploy jobs referencing an Environment pause for approval before using that environment's secrets.
+`,
+
+  "learning-roadmap": `
+A realistic path to senior-level GitHub Actions fluency (assumes the **CI/CD** and **Git** skills are already understood):
+
+**Week 1 — Foundations.** Beginner Concepts + Lab 1: write your first workflow, understand triggers, jobs, steps, actions/checkout. Milestone: a green checkmark on your own repository's pull request.
+
+**Week 2 — Multi-job pipelines.** Intermediate Concepts + Lab 2: needs:, matrix builds, artifacts, job outputs, dependency caching. Milestone: a matrix build across language versions with a measured cache-hit speedup.
+
+**Week 3 — Production patterns.** Advanced Concepts: composite actions, reusable workflows, concurrency groups, environment protection rules. Milestone: extract a duplicated setup sequence into a composite action.
+
+**Week 4 — Security and cloud deployment.** Security section deeply + Lab 4: OIDC federation to a cloud provider, SHA-pinning practice, understand the pull_request_target trap cold. Milestone: a working OIDC-based deploy with zero static cloud secrets.
+
+**Week 5 — Full pipeline + interview polish.** Lab 3, Deployment section's worked example, Interview/Coding Questions. Milestone: a complete test → build-and-push → environment-gated deploy pipeline you can explain line by line, unprompted.
+
+Then continue to the **Docker** and **Kubernetes** skills on this platform if you haven't already — this page assumed familiarity with what you're building and shipping; those pages deepen the artifacts and runtime this pipeline produces and deploys.
+`,
+
+  "official-docs": `
+- [GitHub Actions documentation](https://docs.github.com/en/actions) — the primary reference; start with "Understanding GitHub Actions" then the workflow syntax reference.
+- [Workflow syntax for GitHub Actions](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions) — the exhaustive YAML key reference; bookmark this one specifically.
+- [Security hardening for GitHub Actions](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions) — GitHub's own guidance on SHA-pinning, permissions, and the pull_request_target risk covered in this page's Security section.
+- [About security hardening with OpenID Connect](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect) — the canonical OIDC federation reference.
+- [GitHub Actions Marketplace](https://github.com/marketplace?type=actions) — browse and audit third-party actions before using them.
+- [GitHub Changelog](https://github.blog/changelog/) — the fastest way to track Actions platform changes; filter for "Actions."
+- [actions/starter-workflows](https://github.com/actions/starter-workflows) — GitHub's own maintained collection of starter workflow templates per language/framework.
+`,
+
+  books: `
+- **Learning GitHub Actions** — Brent Laster (O'Reilly). The most thorough dedicated book on the platform; covers workflow authoring through custom action development.
+- **Effective DevOps with GitHub Actions** — Michael Kaufmann. Practical, project-driven coverage of building real pipelines including deployment.
+- **Continuous Delivery** — Jez Humble & David Farley. Not Actions-specific, but the foundational text for the deployment-pipeline thinking every GitHub Actions pipeline should be built on; read alongside the **CI/CD** skill.
+- **Docker Deep Dive** — Nigel Poulton. Useful alongside this page's build-and-push-image sections; understanding images and layers well makes the Docker-related workflow steps click.
+- **The DevOps Handbook** — Kim, Humble, Debois, Willis. Broader organizational context for why CI/CD pipelines exist and what "high-performing" looks like at the team level.
+`,
+
+  blogs: `
+- **The GitHub Blog — Engineering/DevOps category** (github.blog) — first-party announcements and deep dives on new Actions features, often written by the team that built them.
+- **GitHub Changelog** (github.blog/changelog) — terse, frequent, the fastest way to see exactly what shipped and when.
+- **Anthony Shaw's blog / independent Actions security researchers** — a recurring source of real pull_request_target and supply-chain vulnerability writeups worth following if security depth matters to your role.
+- **HashiCorp Engineering Blog** — good examples of matrix builds and multi-provider testing patterns from a heavy Actions user in the open-source infrastructure space.
+- **Snyk / GitHub security advisories on Actions** — practical, incident-driven security guidance that stays current with real-world attack patterns better than any static book chapter can.
+`,
+
+  "research-papers": `
+GitHub Actions itself is a product, not a research subject, so dedicated academic papers are thin — the closest genuinely relevant reading falls into two adjacent research areas:
+
+- **Software supply-chain security research**: papers analyzing CI/CD pipeline compromises and dependency-confusion/typosquatting attacks (a recurring topic at USENIX Security and IEEE S&P in recent years) are directly applicable to the SHA-pinning and pull_request_target risks covered in this page's Security section.
+- **Continuous integration and delivery empirical studies**: research on CI adoption's effect on defect rates and deployment frequency (much of it emerging from the same body of work behind the "State of DevOps"/Accelerate research program by Forsgren, Humble, and Kim) is the closest foundational reading for why CI/CD exists at all — see the **CI/CD** skill for that framing in depth.
+
+If a research-grade citation is required for coursework or a paper, the honest position is: cite the empirical DevOps/CI research (Accelerate: Forsgren, Humble, Kim) for the *why*, and GitHub's own official documentation plus security advisories for the *GitHub-specific how* — there is no canonical peer-reviewed paper about GitHub Actions itself as of this writing.
+`,
+
+  videos: `
+- **GitHub Universe talks on Actions** (GitHub's annual conference, published on YouTube) — the most authoritative source for what's new each year, presented by the team that ships the features.
+- **"GitHub Actions Security Best Practices"** style conference talks (recurring at various security/DevOps conferences) — look for recent talks specifically covering pull_request_target and SHA-pinning, since these are the highest-value, most concretely actionable security topics on this page.
+- **TechWorld with Nana — GitHub Actions tutorial series** — a well-regarded, structured beginner-to-intermediate walkthrough covering workflow syntax through Docker deployment.
+- **HashiCorp's own conference talks on testing Terraform providers with Actions matrices** — a strong real-world matrix-build case study.
+- **fireship.io's short-format GitHub Actions overview** — useful as a fast conceptual refresher, not a substitute for the official docs' depth.
+`,
+
+  "github-repos": `
+- [actions/checkout](https://github.com/actions/checkout) — the near-universal first step of every job; read its README to understand fetch-depth and token inputs deeply.
+- [actions/cache](https://github.com/actions/cache) — study the README's cache key/restore-keys examples across multiple ecosystems.
+- [actions/starter-workflows](https://github.com/actions/starter-workflows) — official templates per language; an excellent "steal this, then adapt it" starting point.
+- [docker/build-push-action](https://github.com/docker/build-push-action) and [docker/login-action](https://github.com/docker/login-action) — the standard Docker build-and-push toolchain referenced throughout this page.
+- [aws-actions/configure-aws-credentials](https://github.com/aws-actions/configure-aws-credentials) — the reference implementation of OIDC-based AWS authentication from a workflow.
+- [nektos/act](https://github.com/nektos/act) — run workflows locally in Docker for fast iteration; referenced in Testing and Debugging.
+- [rhysd/actionlint](https://github.com/rhysd/actionlint) — static analysis for workflow YAML; catches invalid expressions and shellcheck issues before a run ever fires.
+- [sigstore/cosign](https://github.com/sigstore/cosign) — commonly paired with Actions to sign and verify build artifacts, relevant to the supply-chain hardening trend covered in Latest Updates.
+- [step-security/harden-runner](https://github.com/step-security/harden-runner) — a widely-used action for auditing and restricting a runner's outbound network access, a strong defense-in-depth addition to the Security section's guidance.
+`,
+
+  "practice-problems": `
+**Ordered by skill focus:**
+
+1. *Triggers*: write a workflow that runs only on pushes to branches matching release/* and on manually-dispatched runs with a required "environment" input.
+2. *Job graphs*: design a five-job pipeline (lint, unit-test, integration-test, build, deploy) with the correct needs: edges so that lint and unit-test run in parallel, integration-test waits for both, and build/deploy are sequential after that.
+3. *Matrix tuning*: given a project that ships only on Linux but wants to warn (not fail) on Windows compatibility issues, design a matrix with an include: entry for an experimental Windows leg that doesn't block the required status check.
+4. *Caching*: given a monorepo with three services each with their own lockfile, design cache keys that don't collide and don't invalidate each other unnecessarily.
+5. *Composite vs reusable*: given a Node.js and a Python repo in the same org sharing a "post-deploy Slack notification" step, decide whether a composite action or a reusable workflow is the right tool, and justify it.
+6. *Security review*: given a real (or invented) workflow file using pull_request_target that checks out github.event.pull_request.head.sha, rewrite it to remove the privilege-escalation risk while preserving its legitimate intent (e.g., labeling PRs based on file paths changed).
+7. *OIDC design*: sketch the IAM trust policy conditions needed so that only workflows running in the "production" environment of one specific repository can assume a deploy role — not just any workflow in the org.
+8. *Cost control*: given a workflow-minutes bill that tripled month over month with no corresponding growth in team size, list the five most likely causes from this page and how you'd verify each with data before proposing a fix.
+
+External sets: GitHub's own actions/starter-workflows repository (adapt real templates), the OpenSSF Scorecard project (check a real repo's Actions security posture automatically), and any of your own open-source contributions' existing workflow files (read and critique them against this page's Security and Best Practices sections).
+`,
+
+  "architecture-diagram": `
+The reference architecture for a production GitHub Actions-driven CI/CD pipeline — the shape you'll build repeatedly once this page's concepts click:
+
+~~~mermaid
+flowchart TB
+    Dev["Developer pushes / opens PR"] --> GH["GitHub repository\n(.github/workflows/*.yml)"]
+    GH --> Trigger["Event matched:\npush / pull_request / schedule / workflow_dispatch"]
+    Trigger --> Lint["Job: lint + type-check\n(fast, runs on every PR)"]
+    Trigger --> Test["Job: test\nstrategy.matrix across versions/OS"]
+    Lint & Test --> Gate{"All required checks green?"}
+    Gate -- no --> Blocked["Branch protection blocks merge\nstatus check: failed"]
+    Gate -- yes --> Merge["Merge to main"]
+    Merge --> Build["Job: build-and-push image\n(docker/build-push-action, tag = SHA,\ncache: type=gha)"]
+    Build --> Registry[("Container registry\nghcr.io / ECR / ACR / GCR")]
+    Registry --> DeployStaging["Job: deploy-staging\n(auto, no gate)"]
+    DeployStaging --> DeployProd["Job: deploy-production\nenvironment: production\n(required reviewer approval)"]
+    DeployProd --> OIDC["OIDC token exchanged for\nshort-lived cloud credentials\n(no static secret)"]
+    OIDC --> Cloud["Cloud deploy target\n(ECS / AKS / GKE / Kubernetes)"]
+    subgraph SharedInfra["Organization-wide reuse"]
+        Reusable["Reusable workflow:\nbuild-scan-push.yml (workflow_call)"]
+        Composite["Composite action:\nsetup-and-test (local)"]
+    end
+    Build -.calls.-> Reusable
+    Lint -.calls.-> Composite
+    Cloud --> Notify["Failure notification\n(Slack via slackapi/slack-github-action)"]
+~~~
+
+Every box maps to a section on this page: triggers and jobs to Beginner/Intermediate Concepts, the registry and environment gate to Advanced Concepts and Deployment, and the shared reusable workflow/composite action box to the deduplication patterns that scale this architecture across an entire organization.
+`,
+
+  "mind-map": `
+~~~mermaid
+mindmap
+  root((GitHub Actions))
+    Core building blocks
+      Workflow YAML in .github/workflows
+      Triggers: push, pull_request, schedule, workflow_dispatch
+      Jobs and the dependency DAG (needs)
+      Steps: run vs uses
+      Actions: Marketplace, composite, Docker-container
+    Runners
+      GitHub-hosted (managed, ephemeral)
+      Self-hosted (control, private network access)
+      Cost and capacity tradeoffs
+    Speed and scale
+      actions/cache and hit rate
+      Matrix builds
+      Concurrency groups (cancel-in-progress)
+      Path filters for monorepos
+    Reuse patterns
+      Composite actions (within a repo)
+      Reusable workflows (across repos)
+    Security
+      Pinning actions to a commit SHA
+      pull_request vs pull_request_target
+      Least-privilege GITHUB_TOKEN permissions
+      OIDC federation to AWS/Azure/GCP
+      Encrypted + environment-scoped secrets
+    Production
+      Environment protection rules and required reviewers
+      Build-and-push Docker image, tag by SHA
+      Deployment topology and rollback
+      Monitoring: run history, notifications, API metrics
+    Ecosystem
+      Related: CI/CD, Jenkins, Git, Docker, Kubernetes, Terraform
+      Secrets Management for deeper credential handling
+    Career
+      Interview classics: pull_request_target, SHA pinning, OIDC
+      Labs and real projects
+      Reading path forward
+~~~
+`,
+};
+
+export default githubActions;

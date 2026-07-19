@@ -1,0 +1,28 @@
+# --- Node / Next.js (web) ---
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+npm-debug.log*
+
+# --- Python / FastAPI (api) ---
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+*.db
+*.sqlite3
+
+# --- Env & secrets (never commit real values) ---
+.env
+.env.local
+.env.*.local
+
+# --- Editor / OS / tooling cruft ---
+.DS_Store
+Thumbs.db
+.claude/
+tsconfig.verify-*.json
