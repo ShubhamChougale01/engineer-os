@@ -101,6 +101,14 @@ const REGISTRY: Record<string, () => Promise<{ default: SkillContent }>> = {
   attention: () => import("./skills/attention"),
   embeddings: () => import("./skills/embeddings"),
   "vector-search": () => import("./skills/vector-search"),
+  "llm-fundamentals": () => import("./skills/llm-fundamentals"),
+  "prompt-engineering": () => import("./skills/prompt-engineering"),
+  "fine-tuning": () => import("./skills/fine-tuning"),
+  inference: () => import("./skills/inference"),
+  serving: () => import("./skills/serving"),
+  evaluation: () => import("./skills/evaluation"),
+  hallucination: () => import("./skills/hallucination"),
+  guardrails: () => import("./skills/guardrails"),
 };
 
 export const hasContent = (slug: string): boolean => slug in REGISTRY;

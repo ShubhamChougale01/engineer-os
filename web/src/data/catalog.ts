@@ -202,14 +202,14 @@ const RAW: { category: Category; skills: SkillSeed[] }[] = [
   {
     category: { id: "llms", name: "LLMs", emoji: "✨", description: "Working with large language models." },
     skills: [
-      s("llm-fundamentals", "LLM Fundamentals", "Tokens, context windows, sampling, scaling laws."),
-      s("prompt-engineering", "Prompt Engineering", "Getting reliable behavior out of models."),
-      s("fine-tuning", "Fine-Tuning", "SFT, LoRA, RLHF: adapting models."),
-      s("inference", "Inference", "KV caches, batching, speculative decoding."),
-      s("serving", "Serving", "vLLM, TGI, and LLM serving infrastructure."),
-      s("evaluation", "Evaluation", "Benchmarks, LLM-as-judge, eval harnesses."),
-      s("hallucination", "Hallucination", "Why models confabulate and how to mitigate it."),
-      s("guardrails", "Guardrails", "Input/output safety and policy enforcement."),
+      s("llm-fundamentals", "LLM Fundamentals", "Tokens, context windows, sampling, scaling laws.", "done"),
+      s("prompt-engineering", "Prompt Engineering", "Getting reliable behavior out of models.", "done"),
+      s("fine-tuning", "Fine-Tuning", "SFT, LoRA, RLHF: adapting models.", "done"),
+      s("inference", "Inference", "KV caches, batching, speculative decoding.", "done"),
+      s("serving", "Serving", "vLLM, TGI, and LLM serving infrastructure.", "done"),
+      s("evaluation", "Evaluation", "Benchmarks, LLM-as-judge, eval harnesses.", "done"),
+      s("hallucination", "Hallucination", "Why models confabulate and how to mitigate it.", "done"),
+      s("guardrails", "Guardrails", "Input/output safety and policy enforcement.", "done"),
     ],
   },
   {

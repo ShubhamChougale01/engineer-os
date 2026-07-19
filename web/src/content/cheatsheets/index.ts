@@ -97,6 +97,14 @@ const REGISTRY: Record<string, () => Promise<{ default: CheatSheetData }>> = {
   attention: () => import("./attention"),
   embeddings: () => import("./embeddings"),
   "vector-search": () => import("./vector-search"),
+  "llm-fundamentals": () => import("./llm-fundamentals"),
+  "prompt-engineering": () => import("./prompt-engineering"),
+  "fine-tuning": () => import("./fine-tuning"),
+  inference: () => import("./inference"),
+  serving: () => import("./serving"),
+  evaluation: () => import("./evaluation"),
+  hallucination: () => import("./hallucination"),
+  guardrails: () => import("./guardrails"),
 };
 
 export const hasCheatSheet = (slug: string): boolean => slug in REGISTRY;
