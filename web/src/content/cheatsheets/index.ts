@@ -105,6 +105,17 @@ const REGISTRY: Record<string, () => Promise<{ default: CheatSheetData }>> = {
   evaluation: () => import("./evaluation"),
   hallucination: () => import("./hallucination"),
   guardrails: () => import("./guardrails"),
+  "agents-fundamentals": () => import("./agents-fundamentals"),
+  langchain: () => import("./langchain"),
+  langgraph: () => import("./langgraph"),
+  crewai: () => import("./crewai"),
+  "openai-agents-sdk": () => import("./openai-agents-sdk"),
+  autogen: () => import("./autogen"),
+  "agent-memory": () => import("./agent-memory"),
+  planning: () => import("./planning"),
+  reflection: () => import("./reflection"),
+  "tool-calling": () => import("./tool-calling"),
+  mcp: () => import("./mcp"),
 };
 
 export const hasCheatSheet = (slug: string): boolean => slug in REGISTRY;

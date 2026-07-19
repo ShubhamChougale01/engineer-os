@@ -109,6 +109,17 @@ const REGISTRY: Record<string, () => Promise<{ default: SkillContent }>> = {
   evaluation: () => import("./skills/evaluation"),
   hallucination: () => import("./skills/hallucination"),
   guardrails: () => import("./skills/guardrails"),
+  "agents-fundamentals": () => import("./skills/agents-fundamentals"),
+  langchain: () => import("./skills/langchain"),
+  langgraph: () => import("./skills/langgraph"),
+  crewai: () => import("./skills/crewai"),
+  "openai-agents-sdk": () => import("./skills/openai-agents-sdk"),
+  autogen: () => import("./skills/autogen"),
+  "agent-memory": () => import("./skills/agent-memory"),
+  planning: () => import("./skills/planning"),
+  reflection: () => import("./skills/reflection"),
+  "tool-calling": () => import("./skills/tool-calling"),
+  mcp: () => import("./skills/mcp"),
 };
 
 export const hasContent = (slug: string): boolean => slug in REGISTRY;
