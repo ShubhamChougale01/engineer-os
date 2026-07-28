@@ -1,0 +1,101 @@
+import type { CheatSheetData } from "./types";
+
+const rnn: CheatSheetData = {
+  title: "The Ultimate RNNs Cheat Sheet",
+  subtitle: "Cell mechanics · BPTT & gradients · LSTM/GRU gating · seq2seq · production toolbelt",
+  sections: [
+    {
+      title: "Core Mechanics",
+      color: "violet",
+      rows: [
+        { term: "Hidden state h_t", desc: "Running memory carried forward between time steps", code: "h_t = tanh(W_xh x_t + W_hh h_(t-1) + b_h)" },
+        { term: "Weight sharing", desc: "Same W_xh, W_hh, W_hy reused at EVERY time step", code: "One parameter set handles\nsequences of ANY length" },
+        { term: "Initial hidden state h_0", desc: "Usually zeros; seeds the recurrence", code: "h0 = torch.zeros(num_layers, batch, hidden_size)" },
+        { term: "Unrolling", desc: "Treat the recurrence as one layer per time step", code: "graph depth = sequence length T" },
+        { term: "Many-to-one", desc: "Whole sequence in, one label out", code: "sentiment classification" },
+        { term: "Many-to-many (aligned)", desc: "One output per input step", code: "part-of-speech tagging" },
+        { term: "Many-to-many (unaligned)", desc: "Different length in/out sequences", code: "machine translation (seq2seq)" },
+        { term: "One-to-many", desc: "Single input, sequence out", code: "image captioning" },
+        { term: "nn.RNNCell", desc: "Single-step cell for manual loops", code: "h = rnn_cell(x_t, h)" },
+      ],
+    },
+    {
+      title: "BPTT & Gradients",
+      color: "blue",
+      rows: [
+        { term: "BPTT", desc: "Backprop through the unrolled time graph", code: "grad for shared W = SUM over all\ntime steps that used it" },
+        { term: "Truncated BPTT", desc: "Backprop within a chunk only; carry state forward", code: "out, h = rnn(chunk, h.detach())" },
+        { term: "Vanishing gradient", desc: "Grad shrinks exponentially over many steps", code: "product of (T-t) Jacobians,\ndominant eigenvalue < 1" },
+        { term: "Exploding gradient", desc: "Grad grows exponentially; unstable updates", code: "dominant eigenvalue > 1" },
+        { term: "Gradient clipping", desc: "Practical fix for exploding gradients", code: "torch.nn.utils.clip_grad_norm_(\n  model.parameters(), max_norm=5.0)" },
+        { term: "Detach on carry-forward", desc: "Stop graph from growing unbounded", code: "h = h.detach()  # value kept,\n# computation graph dropped" },
+        { term: "Why vanilla RNN struggles long-range", desc: "Repeated multiply-through-tanh decays fast", code: "gradient ~0 after ~20-50 steps\nfor typical vanilla RNN" },
+        { term: "Check gradient health", desc: "NaN/inf and norm trend are the first debug step", code: "torch.isfinite(p.grad).all()" },
+      ],
+    },
+    {
+      title: "LSTM & GRU Gating",
+      color: "emerald",
+      rows: [
+        { term: "LSTM forget gate", desc: "What to erase from the cell state", code: "f_t = sigmoid(W_f [h_(t-1), x_t] + b_f)" },
+        { term: "LSTM input gate", desc: "What new content to add", code: "i_t = sigmoid(W_i [h_(t-1), x_t] + b_i)\nc~_t = tanh(W_c [h_(t-1), x_t] + b_c)" },
+        { term: "LSTM cell state update", desc: "ADDITIVE — the fix for vanishing gradients", code: "c_t = f_t * c_(t-1) + i_t * c~_t" },
+        { term: "LSTM output gate", desc: "What to expose as the hidden state", code: "o_t = sigmoid(W_o [h_(t-1), x_t] + b_o)\nh_t = o_t * tanh(c_t)" },
+        { term: "nn.LSTM", desc: "Returns output AND (h_n, c_n)", code: "out, (h_n, c_n) = lstm(x, (h0, c0))" },
+        { term: "GRU update gate", desc: "Merged forget/input behavior", code: "z_t = sigmoid(W_z [h_(t-1), x_t])" },
+        { term: "GRU reset gate", desc: "How much past state to ignore", code: "r_t = sigmoid(W_r [h_(t-1), x_t])" },
+        { term: "GRU state update", desc: "Interpolate old vs candidate state", code: "h_t = (1-z_t)*h_(t-1) + z_t*h~_t" },
+        { term: "nn.GRU", desc: "Returns output and h_n only — no cell state", code: "out, h_n = gru(x, h0)" },
+        { term: "LSTM vs GRU", desc: "GRU cheaper/fewer params; try both, pick by validation", code: "GRU: 2 gates, no cell state\nLSTM: 3 gates + cell state" },
+        { term: "Forget-gate bias init", desc: "Initialize near 1.0 to bias toward remembering", code: "speeds up learning long deps" },
+      ],
+    },
+    {
+      title: "Architectures",
+      color: "amber",
+      rows: [
+        { term: "Bidirectional RNN", desc: "Two RNNs (fwd + bwd), concatenated hidden states", code: "nn.LSTM(..., bidirectional=True)\n# OFFLINE tasks only" },
+        { term: "Why not for streaming", desc: "Backward pass needs future tokens that don't exist yet", code: "live decoding = forward direction only" },
+        { term: "Stacked (deep) RNN", desc: "Layer 1's output sequence feeds layer 2", code: "nn.LSTM(..., num_layers=3, dropout=0.2)\n# dropout is BETWEEN layers" },
+        { term: "Encoder-decoder (seq2seq)", desc: "Encoder compresses input into final hidden state", code: "decoder h0 = encoder final h" },
+        { term: "Context vector bottleneck", desc: "One fixed vector must summarize the whole input", code: "degrades on long inputs" },
+        { term: "Attention fix", desc: "Decoder looks at ALL encoder hidden states, weighted", code: "see the Attention skill" },
+        { term: "Teacher forcing", desc: "Feed ground truth (not model output) during training", code: "risk: exposure bias at inference" },
+        { term: "Scheduled sampling", desc: "Mix ground truth + model predictions while training", code: "mitigates exposure bias" },
+        { term: "Packing variable lengths", desc: "Skip wasted compute/loss on padding tokens", code: "pack_padded_sequence(x, lengths,\n  batch_first=True, enforce_sorted=False)" },
+      ],
+    },
+    {
+      title: "Pitfalls & Gotchas",
+      color: "rose",
+      rows: [
+        { term: "Vanilla RNN in production", desc: "Almost never justified — use LSTM/GRU instead", code: "vanishes on all but short sequences" },
+        { term: "Skipping gradient clipping", desc: "Exploding gradients happen even with gating", code: "always clip in training loops" },
+        { term: "Naive dropout on recurrence", desc: "Different mask every step destroys memory", code: "nn.LSTM's dropout= only applies\nBETWEEN stacked layers" },
+        { term: "Forgetting .detach()", desc: "Memory leak + backprop through entire history", code: "h = h.detach()  every chunk" },
+        { term: "Bidirectional + streaming", desc: "Architectural impossibility, not just slow", code: "future data doesn't exist yet" },
+        { term: "Unpacked padded batches", desc: "Padding tokens corrupt hidden state + loss", code: "always pack/mask variable-length input" },
+        { term: "Streaming != batch bug", desc: "Step-by-step inference must match full-sequence output", code: "test this invariant explicitly" },
+        { term: "Bigger hidden size fallacy", desc: "More capacity doesn't always mean better validation", code: "tune against held-out metrics" },
+        { term: "Habitual RNN choice", desc: "No streaming/resource constraint? Prefer a pretrained Transformer", code: "justify RNN choice explicitly" },
+      ],
+    },
+    {
+      title: "Production Toolbelt",
+      color: "cyan",
+      rows: [
+        { term: "Safe checkpoint format", desc: "Never unpickle untrusted weights", code: "use safetensors, not raw pickle" },
+        { term: "Session-stateful streaming", desc: "Hidden state must persist across requests", code: "sticky routing OR Redis-backed\nstate store keyed by session ID" },
+        { term: "Idle session eviction", desc: "Prevent unbounded memory growth", code: "TTL on stored per-session state" },
+        { term: "cuDNN-backed layers", desc: "Use nn.LSTM/nn.GRU, not a hand-rolled Python loop", code: "5-10x faster than per-step\nPython loop over LSTMCell" },
+        { term: "Streaming-vs-batch test", desc: "Catches hidden-state carrying bugs", code: "assert torch.allclose(full_out,\n  stepwise_out, atol=1e-5)" },
+        { term: "Gradient norm monitoring", desc: "Track pre/post clip norm every step", code: "alert on near-zero (vanishing)\nor sustained max-clip (masking)" },
+        { term: "Toy canary tasks", desc: "Verify architecture before a full training run", code: "copy task, addition task" },
+        { term: "Per-step latency SLO", desc: "The metric that matters for live streaming decode", code: "not just end-to-end throughput" },
+        { term: "Why Transformers won (one line)", desc: "Parallel training beats RNN's sequential dependency", code: "h_t needs h_(t-1) -> can't\nparallelize across time" },
+      ],
+    },
+  ],
+};
+
+export default rnn;

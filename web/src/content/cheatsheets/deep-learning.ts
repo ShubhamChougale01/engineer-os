@@ -1,0 +1,100 @@
+import type { CheatSheetData } from "./types";
+
+const deepLearning: CheatSheetData = {
+  title: "The Ultimate Deep Learning Cheat Sheet",
+  subtitle: "Training loop · activations · gradients · optimizers · regularization · production",
+  sections: [
+    {
+      title: "Training Loop Essentials",
+      color: "violet",
+      rows: [
+        { term: "Forward pass", desc: "Input flows through layers to produce a prediction", code: "logits = model(x)" },
+        { term: "Loss computation", desc: "Scalar score of how wrong the prediction is", code: "loss = criterion(logits, y)" },
+        { term: "Backward pass", desc: "Chain rule computes every parameter's gradient", code: "loss.backward()   # fills .grad via autograd" },
+        { term: "Weight update", desc: "Optimizer nudges weights opposite their gradient", code: "optimizer.step()\noptimizer.zero_grad()" },
+        { term: "zero_grad()", desc: "Clears accumulated gradients before the next batch", code: "# forgetting this sums gradients\n# across batches -- corrupts training" },
+        { term: "Epoch vs step", desc: "One epoch = one full pass over the training data", code: "for epoch in range(n_epochs):\n    for xb, yb in loader: ..." },
+        { term: "model.train() / model.eval()", desc: "Toggles dropout + batch-norm behavior", code: "model.train()   # dropout active\nmodel.eval()    # dropout off, BN frozen" },
+        { term: "torch.no_grad()", desc: "Skip building the autograd graph at inference", code: "with torch.no_grad():\n    preds = model(x)" },
+        { term: "Numeric backprop example", desc: "w=0.5, x=2, y=3, lr=0.05", code: "y_hat = 0.5*2 = 1.0\ndL/dw = 2*(1.0-3)*2 = -8.0\nw_new = 0.5 - 0.05*(-8.0) = 0.9" },
+      ],
+    },
+    {
+      title: "Activations & Losses",
+      color: "blue",
+      rows: [
+        { term: "ReLU(x)", desc: "max(0, x) -- default hidden-layer choice, no saturation for x>0", code: "torch.relu(x)\nnn.ReLU()" },
+        { term: "Sigmoid(x)", desc: "Squashes to (0,1) -- binary output, gates", code: "torch.sigmoid(x)   # 1/(1+e^-x)" },
+        { term: "Tanh(x)", desc: "Squashes to (-1,1) -- zero-centered sigmoid", code: "torch.tanh(x)" },
+        { term: "Softmax(x)", desc: "Turns logits into a probability distribution summing to 1", code: "F.softmax(logits, dim=-1)" },
+        { term: "Cross-entropy loss", desc: "Standard multi-class classification loss (applies softmax internally)", code: "criterion = nn.CrossEntropyLoss()\nloss = criterion(logits, target)" },
+        { term: "MSE loss", desc: "Standard regression loss", code: "criterion = nn.MSELoss()" },
+        { term: "GELU", desc: "Smooth ReLU variant used in most modern Transformers", code: "nn.GELU()" },
+        { term: "Dying ReLU", desc: "A neuron stuck at 0 output/gradient forever", code: "# mitigate with Leaky ReLU, GELU,\n# or He/Kaiming initialization" },
+        { term: "Why non-linearity is required", desc: "Stacked linear layers collapse into one linear layer", code: "# no activation between layers ==\n# one expensive linear layer" },
+      ],
+    },
+    {
+      title: "Gradients & Initialization",
+      color: "emerald",
+      rows: [
+        { term: "Vanishing gradients", desc: "Chain-rule product of small local gradients shrinks to ~0", code: "# common with sigmoid/tanh saturation\n# early layers stop learning" },
+        { term: "Exploding gradients", desc: "Chain-rule product of large local gradients blows up", code: "# loss becomes NaN / oscillates wildly" },
+        { term: "Gradient clipping", desc: "Cap gradient norm before the optimizer step", code: "torch.nn.utils.clip_grad_norm_(\n    model.parameters(), max_norm=1.0)" },
+        { term: "He / Kaiming init", desc: "Weight init scaled for ReLU-family activations", code: "nn.init.kaiming_normal_(\n    layer.weight, nonlinearity='relu')" },
+        { term: "Xavier / Glorot init", desc: "Weight init scaled for tanh/sigmoid activations", code: "nn.init.xavier_normal_(layer.weight)" },
+        { term: "Batch normalization", desc: "Normalizes activations per batch -- stabilizes + speeds training", code: "nn.BatchNorm1d(num_features)" },
+        { term: "Residual (skip) connection", desc: "Gives the gradient a direct path backward past a sublayer", code: "def forward(x):\n    return x + sublayer(x)" },
+        { term: "Zero-init pitfall", desc: "All-zero weights break symmetry -- every neuron learns identically", code: "# always use random init, never zeros" },
+        { term: "Gradient checking", desc: "Verify a hand-written backward pass with finite differences", code: "(f(w+eps) - f(w-eps)) / (2*eps)" },
+      ],
+    },
+    {
+      title: "Optimizers & Regularization",
+      color: "amber",
+      rows: [
+        { term: "SGD + momentum", desc: "Simple optimizer, velocity term smooths updates", code: "optim.SGD(params, lr=0.01, momentum=0.9)" },
+        { term: "Adam", desc: "Adaptive per-parameter LR -- the default modern choice", code: "optim.Adam(params, lr=1e-3,\n           betas=(0.9, 0.999))" },
+        { term: "AdamW", desc: "Adam with decoupled weight decay -- common LLM default", code: "optim.AdamW(params, lr=1e-3,\n            weight_decay=0.01)" },
+        { term: "Learning rate", desc: "The single most important hyperparameter", code: "# too high -> diverges\n# too low -> stuck / painfully slow" },
+        { term: "LR schedule", desc: "Warmup then decay improves stability and final accuracy", code: "optim.lr_scheduler.CosineAnnealingLR(\n    optimizer, T_max=epochs)" },
+        { term: "Dropout", desc: "Randomly zero activations at TRAIN time only", code: "nn.Dropout(p=0.3)\n# disabled automatically by model.eval()" },
+        { term: "Weight decay (L2)", desc: "Penalizes large weights for smoother, more general functions", code: "optim.Adam(params, lr=1e-3,\n           weight_decay=1e-4)" },
+        { term: "Early stopping", desc: "Halt when validation loss stops improving", code: "if val_loss doesn't improve for\n  N epochs: stop, restore best ckpt" },
+        { term: "Data augmentation", desc: "Manufacture variety from existing data -- strong regularizer", code: "RandomCrop, RandomFlip,\nColorJitter, noise injection" },
+        { term: "Overfitting signal", desc: "Watch the train/validation loss GAP, not train loss alone", code: "# widening gap -> add regularization\n# or gather more data" },
+      ],
+    },
+    {
+      title: "Hardware, Batching & Transfer Learning",
+      color: "rose",
+      rows: [
+        { term: "Why GPUs matter", desc: "Layers are matrix multiplies -- millions of parallel multiply-adds", code: "device = torch.device('cuda')\nmodel, x = model.to(device), x.to(device)" },
+        { term: "Mixed precision", desc: "fp16/bf16 -- roughly 1.5-3x throughput, half the memory", code: "with torch.autocast('cuda', dtype=torch.float16):\n    loss = criterion(model(x), y)" },
+        { term: "Batch size tradeoff", desc: "Small = noisier/regularizing; large = smoother, needs higher LR", code: "# doubling batch size needs a\n# roughly matched LR increase" },
+        { term: "Gradient accumulation", desc: "Simulate a larger batch when memory-limited", code: "loss = loss / accum_steps\nloss.backward()\nif step % accum_steps == 0:\n    optimizer.step(); optimizer.zero_grad()" },
+        { term: "Transfer learning", desc: "Start from a pretrained model instead of random init", code: "backbone = resnet18(weights=DEFAULT)\nfor p in backbone.parameters():\n    p.requires_grad = False" },
+        { term: "Fine-tuning", desc: "Unfreeze + retrain (some) layers with a small LR", code: "backbone.fc = nn.Linear(in_f, n_classes)\noptim.Adam(backbone.fc.parameters(), lr=1e-4)" },
+        { term: "Overfit-tiny-batch sanity check", desc: "The fastest way to verify the pipeline before a full run", code: "# loss on 10-20 examples should\n# approach 0 within ~200 steps" },
+      ],
+    },
+    {
+      title: "Production Toolbelt",
+      color: "cyan",
+      rows: [
+        { term: "Quantization (int8)", desc: "~4x smaller model, faster inference, small accuracy cost", code: "torch.quantization.quantize_dynamic(\n    model, {nn.Linear}, dtype=torch.qint8)" },
+        { term: "Pruning", desc: "Remove low-contribution weights/neurons", code: "torch.nn.utils.prune.l1_unstructured(\n    layer, name='weight', amount=0.3)" },
+        { term: "Knowledge distillation", desc: "Small student model mimics a large teacher's outputs", code: "loss = distill_loss(student(x),\n                     teacher(x).detach())" },
+        { term: "TorchScript export", desc: "Serialize the model graph, drop the Python interpreter", code: "scripted = torch.jit.script(model)\nscripted.save('model.pt')" },
+        { term: "ONNX export", desc: "Cross-framework interchange format for serving", code: "torch.onnx.export(model, sample_input,\n                   'model.onnx')" },
+        { term: "Safe checkpoint format", desc: "Never load untrusted pickle -- use safetensors", code: "from safetensors.torch import save_file\nsave_file(model.state_dict(), 'w.safetensors')" },
+        { term: "Golden-output test", desc: "Fixed input should always give the same output after a refactor", code: "assert torch.allclose(\n    model(fixed_x), expected_output)" },
+        { term: "Gradient norm logging", desc: "Catches vanishing/exploding gradients before loss looks wrong", code: "for n, p in model.named_parameters():\n    print(n, p.grad.norm().item())" },
+        { term: "Model warm-up", desc: "First inference after load is slower (CUDA kernel compile/cache)", code: "model(warmup_input)   # discard result,\n                       # run once at startup" },
+        { term: "Serving latency budget", desc: "Measure p50/p95/p99, split preprocessing/forward/postprocessing", code: "# profile each stage separately\n# before optimizing the wrong one" },
+      ],
+    },
+  ],
+};
+
+export default deepLearning;

@@ -1,0 +1,110 @@
+import type { CheatSheetData } from "./types";
+
+const claudeCode: CheatSheetData = {
+  title: "The Ultimate Claude Code Cheat Sheet",
+  subtitle: "Primitives · permissions · hooks · checkpoints · headless CI/CD · MCP · plugins",
+  sections: [
+    {
+      title: "Core Primitives (simplest to most complex)",
+      color: "violet",
+      rows: [
+        { term: "CLAUDE.md", desc: "Project memory — conventions, stack, commands, standing instructions loaded every session", code: "claude\n> /init   # generate a starter CLAUDE.md from the codebase" },
+        { term: "settings.json", desc: "What Claude can do — tool permission allow/deny/ask rules", code: "{ \"permissions\": { \"allow\": [\"Bash(git status)\"] } }" },
+        { term: "Slash command", desc: "Explicit, typed, reusable prompt template invoked by name every time", code: ".claude/commands/commit-message.md\n---\ndescription: Generate a conventional commit message\n---" },
+        { term: "Skill", desc: "SKILL.md + files, auto-triggered by relevance, not explicitly invoked", code: "---\nname: db-migration\ndescription: Use when creating a DB migration\n---" },
+        { term: "Subagent", desc: "Isolated context window for parallel or heavy work; background by default (v2.1.198+)", code: ".claude/agents/test-writer.md" },
+        { term: "Hook", desc: "Deterministic shell script fired at a lifecycle event — code-enforced, not prompted", code: "{ \"hooks\": { \"Stop\": [ { \"hooks\": [ { \"type\": \"command\", \"command\": \".claude/hooks/require-tests-pass.sh\" } ] } ] } }" },
+        { term: "MCP server", desc: "Connection to an external tool/data source/service — Claude Code is an MCP client", code: "{ \"mcpServers\": { \"postgres-readonly\": { \"command\": \"npx\", \"args\": [\"-y\", \"@modelcontextprotocol/server-postgres\", \"...\"] } } }" },
+        { term: "Plugin", desc: "Installable bundle of commands+agents+skills+hooks+.mcp.json plus a manifest", code: "claude\n> /plugin install team-review-toolkit" },
+      ],
+    },
+    {
+      title: "Choosing the Right Primitive",
+      color: "blue",
+      rows: [
+        { term: "Always-true convention", desc: "Short project fact everyone should just know", code: "-> CLAUDE.md" },
+        { term: "Guaranteed, explicit action", desc: "You want it to fire every time, no ambiguity", code: "-> Slash command" },
+        { term: "Reusable domain knowledge", desc: "Should auto-apply when relevant, bundles helper files", code: "-> Skill" },
+        { term: "Isolated / parallel work", desc: "Heavy exploration or independent subtasks", code: "-> Subagent" },
+        { term: "A rule that must never be skipped", desc: "Enforce with code, not hope", code: "-> Hook" },
+        { term: "External system reach", desc: "Ticket tracker, DB, internal API, Slack", code: "-> MCP server" },
+        { term: "Org-wide distribution", desc: "Ship the same multi-part setup to every repo/engineer", code: "-> Plugin" },
+        { term: "Skill not triggering reliably?", desc: "Auto-trigger relevance failed on an edge case", code: "-> Convert to (or back with) a slash command" },
+      ],
+    },
+    {
+      title: "Hook Lifecycle Events & Examples",
+      color: "emerald",
+      rows: [
+        { term: "SessionStart", desc: "Inject fresh context when a session begins", code: "matcher: none needed, fires once per session start" },
+        { term: "PreToolUse", desc: "Gate or block before a tool call executes", code: "\"matcher\": \"Edit\"  # runs before any Edit tool call" },
+        { term: "PostToolUse", desc: "React after a tool call completes", code: "\"matcher\": \"Bash\"  # e.g. run a scan after dependency changes" },
+        { term: "Stop", desc: "Gate before the agent may finish a turn", code: "exit 1 to block completion; exit 0 to allow" },
+        { term: "SubagentStop", desc: "React when a delegated subagent finishes", code: "used to validate a subagent's report before accepting it" },
+        { term: "Block generated-file edits", desc: "PreToolUse hook reading tool_input.file_path", code: "FILE=\\$(echo \"\\$INPUT\" | jq -r '.tool_input.file_path')\n[[ \"\\$FILE\" == generated/* ]] && exit 1" },
+        { term: "Require tests pass", desc: "Stop hook re-running the suite, not trusting narration", code: "npm test --silent || exit 1" },
+        { term: "Hook reload rule", desc: "SKILL.md live-reloads instantly; hooks/.mcp.json/agents do not", code: "claude\n> /reload-plugins   # after editing hooks, .mcp.json, or agents/" },
+      ],
+    },
+    {
+      title: "Checkpoints, Rewind & Sandboxing",
+      color: "amber",
+      rows: [
+        { term: "Automatic checkpoint", desc: "Snapshot taken before every change Claude Code makes", code: "no setup needed — happens automatically" },
+        { term: "/rewind", desc: "Instantly restore to a prior checkpoint", code: "claude\n> /rewind" },
+        { term: "Escape-Escape", desc: "Keyboard shortcut for instant rewind", code: "press Esc twice" },
+        { term: "Restore: code only", desc: "Undo the edit, keep the conversation's diagnosis", code: "choose 'code' in the rewind picker" },
+        { term: "Restore: conversation only", desc: "Discard a bad discussion branch, keep good code", code: "choose 'conversation' in the rewind picker" },
+        { term: "Restore: both", desc: "Full reset — pretend this turn never happened", code: "choose 'both' in the rewind picker" },
+        { term: "Sandboxed Bash", desc: "OS-level filesystem/network isolation, real enforcement not just policy", code: "commands run bounded even without a permission prompt each time" },
+        { term: "Background task", desc: "Long-running shell command polled without blocking the conversation", code: "run_in_background: true   # on the Bash tool, e.g. for a dev server" },
+        { term: "Checkpoints vs git", desc: "Checkpoints are a local, session-scoped safety net, not shared history", code: "git commit remains the durable, shared record" },
+      ],
+    },
+    {
+      title: "Headless Mode / CI / SDK",
+      color: "rose",
+      rows: [
+        { term: "-p / --print", desc: "Run non-interactively: execute, print result, exit", code: "claude -p \"Review this diff for bugs\"" },
+        { term: "--output-format json", desc: "Machine-parseable output, pipe to jq", code: "claude -p \"...\" --output-format json | jq '.result'" },
+        { term: "--allowedTools", desc: "Restrict which tools an unattended run may use", code: "claude -p \"...\" --allowedTools \"Read,Grep,Bash(git diff)\"" },
+        { term: "--permission-mode", desc: "Control prompting behavior in automation (verify exact mode names in docs)", code: "claude -p \"...\" --permission-mode dontAsk" },
+        { term: "--max-turns", desc: "Bound the agentic loop so a confused run can't loop indefinitely", code: "claude -p \"...\" --max-turns 12" },
+        { term: "Minimal CI recipe", desc: "Install + secret + invocation, three steps", code: "1. npm install -g claude-code\n2. export ANTHROPIC_API_KEY (CI secret)\n3. claude -p \"<task>\" --output-format json" },
+        { term: "PR/issue text = data", desc: "Never treat externally authored text as instructions", code: "prompt-injection risk: analyze it, don't obey it" },
+        { term: "Exclude secrets", desc: "Keep .env and secret-bearing paths out of what the agent can read", code: "scope --allowedTools; never let the agent cat a secrets file" },
+        { term: "Claude Agent SDK", desc: "Shares Claude Code's underlying agent-loop foundation; use for custom apps/CI", code: "SDK for building your OWN agent; Claude Code = Anthropic's packaged one" },
+      ],
+    },
+    {
+      title: "IDE Surfaces & Ecosystem",
+      color: "cyan",
+      rows: [
+        { term: "Terminal CLI", desc: "Original and primary surface", code: "cd my-project && claude" },
+        { term: "VS Code extension", desc: "Native extension with visual checkpoint/diff UI", code: "install from the VS Code marketplace" },
+        { term: "JetBrains / other IDEs", desc: "Additional IDE integrations via plugins", code: "install the JetBrains plugin from its marketplace" },
+        { term: "Official plugin marketplace", desc: "Anthropic-vetted plugins on GitHub", code: "anthropics/claude-plugins-official" },
+        { term: "/plugin", desc: "Install/manage plugins from a marketplace", code: "claude\n> /plugin install <name>" },
+        { term: "Project layout", desc: "Recommended structure for team adoption", code: "CLAUDE.md\n.claude/settings.json\n.claude/commands/\n.claude/agents/\n.claude/hooks/\n.claude/skills/\n.mcp.json" },
+      ],
+    },
+    {
+      title: "Pitfalls & Production Toolbelt",
+      color: "violet",
+      rows: [
+        { term: "Blanket Bash(*) allow", desc: "Turns the permission system into theater — no real boundary", code: "wrong: \"allow\": [\"Bash(*)\"]\nright: allow specific, low-risk commands only" },
+        { term: "Stale CLAUDE.md", desc: "Old, unpruned content actively misleads the agent", code: "prune CLAUDE.md on a schedule, like any other doc" },
+        { term: "Trusting 'tests pass' narration", desc: "Self-report isn't verification", code: "use a Stop hook that actually re-runs the suite" },
+        { term: "Subagent fan-out by habit", desc: "Token cost scales roughly with subagent count", code: "reserve subagents for genuinely independent, parallelizable work" },
+        { term: "MCP over-permissioning", desc: "A connected server is a trusted tool surface — least-privilege it", code: "prefer read-only credentials scoped to one DB/repo" },
+        { term: "/context", desc: "Inspect what's consuming context budget right now", code: "claude\n> /context" },
+        { term: "/compact", desc: "Summarize and shrink context in a long session", code: "claude\n> /compact" },
+        { term: "/review", desc: "Review a pull request", code: "claude\n> /review" },
+        { term: "/security-review", desc: "Security-focused review pass on pending changes", code: "claude\n> /security-review" },
+        { term: "Human review still required", desc: "Autonomy features reduce friction, not the need for review", code: "treat agent-authored diffs like any other PR" },
+      ],
+    },
+  ],
+};
+
+export default claudeCode;

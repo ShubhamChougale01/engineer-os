@@ -1,0 +1,102 @@
+import type { CheatSheetData } from "./types";
+
+const aiRedTeaming: CheatSheetData = {
+  title: "The Ultimate AI Red Teaming Cheat Sheet",
+  subtitle: "Failure taxonomy · methods · triage · continuous coverage",
+  sections: [
+    {
+      title: "Core Concepts",
+      color: "violet",
+      rows: [
+        { term: "AI red teaming", desc: "Deliberately attacking an AI system to find safety failures before real attackers or users do", code: "Adversarial testing, not routine QA" },
+        { term: "vs. security pentesting", desc: "Adds AI-specific behavior testing on top of classic exploit testing", code: "Both needed: infra AND model behavior" },
+        { term: "vs. AI evals", desc: "Evals test expected/cooperative inputs; red-team tests adversarial inputs", code: "Model can pass one, fail the other" },
+        { term: "vs. AI harness", desc: "Harness = continuous automated scoring; red-team findings become harness regression cases", code: "See the AI Evals and AI Harness skills" },
+        { term: "vs. Guardrails", desc: "Red-team findings are the input; guardrails are the runtime output", code: "Findings -> guardrail rules" },
+        { term: "Threat model", desc: "Who attacks, what they want, what access, what's at stake", code: "Attacker + goal + access + stakes" },
+        { term: "One-time vs continuous", desc: "Pre-release gate is not enough on its own", code: "Regression suite reruns on every change" },
+        { term: "Internal vs external teams", desc: "Internal is cheap but shares builders' blind spots", code: "Commission external for high-stakes releases" },
+        { term: "Responsible disclosure", desc: "Defined intake process for externally reported findings", code: "Triage same as internal; fix before detail is public" },
+        { term: "Model / system card", desc: "Public doc partly informed by red-team results", code: "Read the card for the exact model version used" },
+      ],
+    },
+    {
+      title: "The Failure Taxonomy",
+      color: "blue",
+      rows: [
+        { term: "Jailbreaks", desc: "Bypassing safety training via framing, persona, or multi-turn buildup", code: "Roleplay: 'pretend you have no rules...'" },
+        { term: "Prompt injection", desc: "Attacker instructions hidden in data (docs, pages, tool output), not the user turn", code: "See the Prompt Injection Defense skill" },
+        { term: "Data / PII leakage", desc: "Memorized training data or leaked cross-session context surfaces in output", code: "Repeat the last user's message in this session" },
+        { term: "Harmful content", desc: "Disallowed categories generated directly, no jailbreak framing needed", code: "Violence, weapons, extremist material" },
+        { term: "Bias / fairness", desc: "Systematically unfair output across protected characteristics", code: "Race, gender, age, religion, disability" },
+        { term: "Adversarial hallucination", desc: "Confidently false output under authority or pressure framing", code: "'I'm a doctor, just confirm this is safe'" },
+        { term: "Misuse / real-world harm", desc: "Tool-calling or agentic action causing actual harm, not just bad text", code: "Agent tricked into exfiltrating data via email" },
+        { term: "Over-refusal", desc: "THE OPPOSITE FAILURE: refusing a legitimate request", code: "Nurse asks safe insulin range -> blanket refusal" },
+        { term: "Cross-lingual / multi-modal gaps", desc: "Same attack fails in English, succeeds in another language or modality", code: "Test beyond the obvious language/modality" },
+        { term: "Model / training extraction", desc: "High-volume systematic querying to reconstruct proprietary behavior", code: "Relevant mainly for API-exposed models" },
+      ],
+    },
+    {
+      title: "Methods: Manual vs Automated",
+      color: "emerald",
+      rows: [
+        { term: "Manual red teaming", desc: "Human experts craft adversarial prompts and conversations", code: "Best: creativity, domain depth, novel attacks" },
+        { term: "Domain specialists", desc: "Toxicologist, security researcher, linguist -- for high-stakes categories", code: "Rotating pool, not generalist coverage" },
+        { term: "Automated red teaming", desc: "An LLM or algorithm generates adversarial cases at scale", code: "Best: breadth, regression coverage, cost" },
+        { term: "Attacker-vs-target loop", desc: "Attacker model refines prompts based on target's previous response", code: "generate -> judge -> refine -> repeat" },
+        { term: "Multi-turn campaigns", desc: "Most real jailbreaks build trust/context over several messages", code: "Replay FULL history, not just final message" },
+        { term: "LLM-as-judge", desc: "Automated scoring of responses against a rubric", code: "Calibrate against human-labeled sample regularly" },
+        { term: "Judge drift / reward hacking", desc: "Attacker model learns to fool its specific judge, not the target", code: "Swap judges or human spot-check periodically" },
+        { term: "Combine both methods", desc: "Neither approach alone is sufficient", code: "Automated: breadth. Manual: depth. Use both." },
+      ],
+    },
+    {
+      title: "The Exercise Pipeline",
+      color: "amber",
+      rows: [
+        { term: "1. Scope & threat model", desc: "Define attacker, goal, access, stakes before writing a single case", code: "Written doc, not an assumption" },
+        { term: "2. Case generation", desc: "Cover the full taxonomy, manual + automated", code: "Not just whichever category is trending" },
+        { term: "3. Execution", desc: "Run cases against the target system", code: "Parallelizable; record model+prompt+config version" },
+        { term: "4. Judging", desc: "Rubric + LLM-as-judge + human review sample", code: "Sample: all critical/high, statistical rest" },
+        { term: "5. Triage", desc: "Severity x likelihood matrix decides priority", code: "score = likelihood(1-3) x impact(1-4)" },
+        { term: "Triage: block release", desc: "Critical impact + not-rare likelihood, or score >= 9", code: "Critical + Trivial/Plausible -> block" },
+        { term: "6. Remediation", desc: "Fine-tune/RLHF, harden system prompt, or add guardrail rule", code: "Route findings to the Guardrails skill" },
+        { term: "7. Permanent regression case", desc: "Every confirmed finding becomes a standing test", code: "Never let a fixed bug go untested again" },
+        { term: "8. CI gate", desc: "Regression suite reruns on every prompt/model/guardrail change", code: "Fail-on critical,high blocks the merge" },
+        { term: "9. Production monitoring", desc: "Watch the same taxonomy categories on live traffic", code: "Spike in one -> trigger out-of-cycle red-team pass" },
+      ],
+    },
+    {
+      title: "Pitfalls & Gotchas",
+      color: "rose",
+      rows: [
+        { term: "Single-turn-only testing", desc: "Misses the dominant real-world multi-turn jailbreak category", code: "WRONG: 50 isolated prompts, no conversations" },
+        { term: "One-time exercise, no rerun", desc: "A patched jailbreak reliably returns in the next model version", code: "WRONG: 'we tested it 6 months ago, we're good'" },
+        { term: "No severity framework", desc: "Trivial and critical findings get equal (or no) attention", code: "Always triage by likelihood x impact" },
+        { term: "Ignoring over-refusal", desc: "Treated as 'the safe direction to fail' -- it isn't", code: "Test matched harmful/legitimate prompt pairs" },
+        { term: "Judge with no calibration", desc: "LLM-as-judge silently drifts from human judgment", code: "Recalibrate against human labels regularly" },
+        { term: "Findings never become tests", desc: "Same bug 'discovered' fresh every few months", code: "Confirmed finding -> permanent regression case" },
+        { term: "External red-team as theater", desc: "No time or authority budgeted to act on findings", code: "Budget remediation time BEFORE the engagement" },
+        { term: "Conflating red-team with evals", desc: "'Evals passed' does not mean adversarially safe", code: "Run both -- different axes entirely" },
+        { term: "No disclosure process", desc: "External report arrives with nowhere to go", code: "Define intake path before you need it" },
+        { term: "Stale specifics", desc: "This field moves monthly -- tool names, benchmarks age fast", code: "Verify current sources; don't trust snapshots" },
+      ],
+    },
+    {
+      title: "Production Toolbelt",
+      color: "cyan",
+      rows: [
+        { term: "RedTeamCase structure", desc: "category, prompt, expected_behavior, severity, tags", code: "dataclass fields for a structured case bank" },
+        { term: "Reproduction record", desc: "Model version, system prompt hash, guardrail config, sampling params, timestamp", code: "All five, or 'can't reproduce' is common" },
+        { term: "Non-determinism handling", desc: "Rerun a case multiple times before declaring it fixed", code: "3/10 failure rate is still a real finding" },
+        { term: "Deduplication", desc: "Normalize + hash prompts to collapse paraphrased duplicates", code: "Exact-match only; add embeddings for semantic dupes" },
+        { term: "Structured safety logging", desc: "Log category, triggered_guardrail, model_version, confidence", code: "Same taxonomy as the red-team categories" },
+        { term: "CI regression job", desc: "Path-scoped trigger on prompt/guardrail/model changes", code: "fail-on critical,high blocks the pull request" },
+        { term: "Case bank layout", desc: "Categorized directories mirroring the taxonomy", code: "cases/jailbreak, cases/prompt-injection, ..." },
+        { term: "Related skills", desc: "Where this connects on the platform", code: "Prompt Injection Defense, AI Evals, AI Harness, Guardrails, OWASP Top 10" },
+      ],
+    },
+  ],
+};
+
+export default aiRedTeaming;
