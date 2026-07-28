@@ -82,10 +82,10 @@ const Section = memo(function Section({
           onClick={() => onToggle(sectionId)}
           aria-label={isDone ? "Mark as unread" : "Mark as read"}
           title={isDone ? "Mark as unread" : "Mark as read"}
-          className={`ml-auto flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+          className={`btn-3d ml-auto flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] transition-colors ${
             isDone
-              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
-              : "border-line text-ink-faint hover:border-ink-faint hover:text-ink"
+              ? "bg-emerald-500/10 text-emerald-500"
+              : "bg-surface-raised text-ink-faint hover:text-ink"
           }`}
         >
           {isDone ? <CheckCircle2 size={13} /> : <Circle size={13} />}
@@ -183,7 +183,7 @@ export function SkillDetail({
           <button
             onClick={() => toggle(skill.slug)}
             aria-label={bookmarked ? "Remove bookmark" : "Add bookmark"}
-            className={`rounded-lg p-2 ${bookmarked ? "text-accent" : "text-ink-faint hover:text-ink"}`}
+            className={`btn-3d rounded-full bg-surface-raised p-2 ${bookmarked ? "text-accent" : "text-ink-faint hover:text-ink"}`}
           >
             <Bookmark size={18} fill={bookmarked ? "currentColor" : "none"} />
           </button>
@@ -192,7 +192,7 @@ export function SkillDetail({
               onClick={() => setSheetOpen(true)}
               aria-label="Open cheat sheet"
               title="Cheat sheet"
-              className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:border-accent hover:text-accent"
+              className="btn-3d flex items-center gap-1.5 rounded-xl bg-surface-raised px-2.5 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:text-accent"
             >
               <ScrollText size={15} />
               Cheat sheet
@@ -202,8 +202,8 @@ export function SkillDetail({
         <p className="text-sm text-ink-muted">{skill.description}</p>
 
         <div className="mt-4 flex items-center gap-3">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
-            <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+          <div className="track-3d h-1.5 flex-1 overflow-hidden rounded-full">
+            <div className="fill-3d h-full rounded-full transition-all" style={{ width: `${pct}%` }} />
           </div>
           <span className="text-xs tabular-nums text-ink-faint">
             {done.size}/{TEMPLATE.length} sections

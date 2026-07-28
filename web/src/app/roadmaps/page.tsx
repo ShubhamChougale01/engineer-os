@@ -31,10 +31,10 @@ export default function RoadmapPage() {
         {stages.map(({ category: c, skills }, i) => {
           return (
             <li key={c.id} className="relative">
-              <span className="absolute -left-[31px] flex h-5 w-5 items-center justify-center rounded-full border border-line bg-surface-raised text-[10px] font-semibold text-ink-muted">
+              <span className="tile-3d absolute -left-[39px] flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-white">
                 {i + 1}
               </span>
-              <div className="rounded-xl border border-line bg-surface-raised p-4">
+              <div className="surface-3d surface-3d-hover rounded-2xl p-4">
                 <div className="mb-1 flex items-center gap-2">
                   <span>{c.emoji}</span>
                   <h2 className="font-medium">{c.name}</h2>
@@ -45,7 +45,7 @@ export default function RoadmapPage() {
                     <Link
                       key={s.slug}
                       href={`/skills/${s.slug}`}
-                      className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-xs text-ink-muted transition-colors hover:border-accent hover:text-accent"
+                      className="btn-3d flex items-center gap-1.5 rounded-full bg-surface-raised px-3 py-1 text-xs text-ink-muted transition-colors hover:text-accent"
                     >
                       {s.name}
                       {s.status === "done" && <StatusBadge status="done" />}

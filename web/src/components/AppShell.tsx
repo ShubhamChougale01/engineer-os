@@ -121,7 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Sidebar (desktop) */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface px-4 py-6 md:flex">
         <Link href="/" className="mb-8 flex items-center gap-2 px-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-bold text-white">
+          <span className="tile-3d flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold text-white">
             AI
           </span>
           <span className="text-sm font-semibold tracking-tight">Engineer OS</span>
@@ -143,7 +143,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button
               onClick={() => setMobileNav(false)}
               aria-label="Close navigation"
-              className="mb-4 rounded-lg p-2 text-ink-muted hover:bg-surface-raised"
+              className="btn-3d mb-4 rounded-xl p-2 text-ink-muted hover:bg-surface-raised"
             >
               <X size={18} />
             </button>
@@ -158,7 +158,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             onClick={() => setMobileNav(true)}
             aria-label="Open navigation"
-            className="rounded-lg p-2 text-ink-muted hover:bg-surface-raised md:hidden"
+            className="btn-3d rounded-xl p-2 text-ink-muted hover:bg-surface-raised md:hidden"
           >
             <Menu size={18} />
           </button>
@@ -174,7 +174,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             onClick={toggle}
             aria-label="Toggle theme"
-            className="ml-auto rounded-lg p-2 text-ink-muted hover:bg-surface-raised"
+            className="btn-3d ml-auto rounded-full bg-surface-raised p-2 text-ink-muted hover:text-accent"
           >
             {dark ? <Sun size={16} /> : <Moon size={16} />}
           </button>

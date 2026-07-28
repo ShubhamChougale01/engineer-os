@@ -62,7 +62,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative w-full max-w-lg overflow-hidden rounded-xl border border-line bg-surface-raised shadow-2xl">
+      <div className="surface-3d relative w-full max-w-lg overflow-hidden rounded-2xl shadow-[var(--shadow-lg)]">
         <div className="flex items-center gap-2 border-b border-line px-4">
           <Search size={16} className="text-ink-faint" />
           <input

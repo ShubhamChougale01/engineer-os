@@ -15,9 +15,15 @@ export function SkillCard({ skill }: { skill: Skill }) {
   const bookmarked = isBookmarked(skill.slug);
 
   return (
-    <div className="group relative rounded-xl border border-line bg-surface-raised p-4 transition-colors hover:border-accent/50">
+    <div
+      className="surface-3d surface-3d-hover group relative rounded-2xl p-4 transition-all duration-300"
+      style={{ animation: "reveal-up 0.6s cubic-bezier(0.22,1,0.36,1) forwards" }}
+    >
       <div className="mb-1 flex items-start justify-between gap-2">
-        <Link href={`/skills/${skill.slug}`} className="font-medium after:absolute after:inset-0">
+        <Link
+          href={`/skills/${skill.slug}`}
+          className="font-medium after:absolute after:inset-0 transition-colors group-hover:text-accent"
+        >
           {skill.name}
         </Link>
         <button
@@ -26,9 +32,11 @@ export function SkillCard({ skill }: { skill: Skill }) {
             toggle(skill.slug);
           }}
           aria-label={bookmarked ? "Remove bookmark" : "Add bookmark"}
-          className={`relative z-10 rounded p-1 transition-colors ${
-            bookmarked ? "text-accent" : "text-ink-faint opacity-0 group-hover:opacity-100"
-          }`}
+          className={`btn-3d relative z-10 rounded-full p-1.5 transition-all duration-200 ${
+            bookmarked
+              ? "bg-accent-soft text-accent"
+              : "text-ink-faint opacity-0 group-hover:opacity-100"
+          } group-hover:scale-110`}
         >
           <Bookmark size={15} fill={bookmarked ? "currentColor" : "none"} />
         </button>
@@ -41,8 +49,11 @@ export function SkillCard({ skill }: { skill: Skill }) {
         )}
       </div>
       {pct > 0 && (
-        <div className="mt-2 h-1 overflow-hidden rounded-full bg-line">
-          <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+        <div className="track-3d mt-2 h-1.5 overflow-hidden rounded-full">
+          <div
+            className="fill-3d h-full rounded-full transition-all duration-500"
+            style={{ width: `${pct}%` }}
+          />
         </div>
       )}
     </div>

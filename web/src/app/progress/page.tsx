@@ -34,14 +34,14 @@ export default function ProgressPage() {
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-line">
+        <div className="space-y-2">
           {rows.map(({ skill, count }) => {
             const pct = Math.round((count / TEMPLATE.length) * 100);
             return (
               <Link
                 key={skill.slug}
                 href={`/skills/${skill.slug}`}
-                className="flex items-center gap-4 border-b border-line bg-surface-raised px-4 py-3 last:border-0 hover:bg-surface"
+                className="surface-3d surface-3d-hover flex items-center gap-4 rounded-xl px-4 py-3"
               >
                 <div className="w-40 shrink-0">
                   <div className="truncate text-sm font-medium">{skill.name}</div>
@@ -49,8 +49,8 @@ export default function ProgressPage() {
                     {CATEGORY_BY_ID[skill.categoryId]?.name}
                   </div>
                 </div>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
-                  <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                <div className="track-3d h-1.5 flex-1 overflow-hidden rounded-full">
+                  <div className="fill-3d h-full rounded-full" style={{ width: `${pct}%` }} />
                 </div>
                 <span className="w-20 shrink-0 text-right text-xs tabular-nums text-ink-muted">
                   {count}/{TEMPLATE.length} · {pct}%
