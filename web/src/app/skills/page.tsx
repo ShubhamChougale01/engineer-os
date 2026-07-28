@@ -68,8 +68,8 @@ function SkillsBrowser() {
                 {c.emoji} {c.name}
               </h2>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {skills.map((s) => (
-                  <SkillCard key={s.slug} skill={s} />
+                {skills.map((s, i) => (
+                  <SkillCard key={s.slug} skill={s} index={i} />
                 ))}
               </div>
             </section>
@@ -77,8 +77,8 @@ function SkillsBrowser() {
         })
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((s) => (
-            <SkillCard key={s.slug} skill={s} />
+          {filtered.map((s, i) => (
+            <SkillCard key={s.slug} skill={s} index={i} />
           ))}
           {filtered.length === 0 && (
             <p className="col-span-full py-12 text-center text-sm text-ink-faint">

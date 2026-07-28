@@ -2,7 +2,14 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   darkMode: "class",
-  content: ["./src/**/*.{ts,tsx}"],
+  content: [
+    "./src/**/*.{ts,tsx}",
+    // Skill/cheat-sheet content files are markdown-in-string data, never JSX
+    // or Tailwind classes — scanning ~320 large files here for nothing was
+    // the single biggest contributor to cold-start compile time.
+    "!./src/content/skills/**",
+    "!./src/content/cheatsheets/**",
+  ],
   theme: {
     extend: {
       colors: {

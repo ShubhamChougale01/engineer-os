@@ -71,7 +71,15 @@ function ParallaxRig({ animate, children }: { animate: boolean; children: React.
   return <group ref={rig}>{children}</group>;
 }
 
-function KnowledgeGraph({ color, animate }: { color: THREE.Color; animate: boolean }) {
+function KnowledgeGraph({
+  color,
+  animate,
+  opacity,
+}: {
+  color: THREE.Color;
+  animate: boolean;
+  opacity: number;
+}) {
   const group = useRef<THREE.Group>(null);
   const nodeRefs = useRef<(THREE.Mesh | null)[]>([]);
   const { nodes, links } = useMemo(() => buildGraph(), []);
@@ -113,7 +121,7 @@ function KnowledgeGraph({ color, animate }: { color: THREE.Color; animate: boole
   return (
     <group ref={group}>
       <lineSegments geometry={linkGeometry}>
-        <lineBasicMaterial color={color} transparent opacity={0.5} />
+        <lineBasicMaterial color={color} transparent opacity={opacity * 0.5} />
       </lineSegments>
       {nodes.map((n, i) => (
         <mesh
@@ -125,14 +133,14 @@ function KnowledgeGraph({ color, animate }: { color: THREE.Color; animate: boole
           position={n.position}
           scale={n.scale}
         >
-          <meshBasicMaterial color={color} wireframe transparent opacity={0.85} />
+          <meshBasicMaterial color={color} wireframe transparent opacity={opacity * 0.85} />
         </mesh>
       ))}
     </group>
   );
 }
 
-function CoreShell({ color, animate }: { color: THREE.Color; animate: boolean }) {
+function CoreShell({ color, animate, opacity }: { color: THREE.Color; animate: boolean; opacity: number }) {
   const mesh = useRef<THREE.Mesh>(null);
 
   useFrame((state) => {
@@ -146,20 +154,34 @@ function CoreShell({ color, animate }: { color: THREE.Color; animate: boolean })
     <mesh ref={mesh}>
       {/* Low segment counts on purpose: a dense knot reads as noise at this scale. */}
       <torusKnotGeometry args={[0.92, 0.24, 72, 10]} />
-      <meshBasicMaterial color={color} wireframe transparent opacity={0.3} />
+      <meshBasicMaterial color={color} wireframe transparent opacity={opacity * 0.3} />
     </mesh>
   );
 }
 
-function Scene({ accent, animate }: { accent: string; animate: boolean }) {
+type SceneVariant = "hero" | "ambient";
+
+function Scene({
+  accent,
+  animate,
+  variant,
+}: {
+  accent: string;
+  animate: boolean;
+  variant: SceneVariant;
+}) {
   const color = useMemo(() => new THREE.Color(accent), [accent]);
+  // Hero: offset right so the graph sits behind the stat tiles rather than
+  // behind the headline. Ambient: centered and faded, a background texture
+  // for pages that don't have a dedicated hero to hide behind.
+  const position: [number, number, number] = variant === "hero" ? [3.05, 0, 0] : [0, 0, 0];
+  const scale = variant === "hero" ? 0.95 : 1.35;
+  const opacity = variant === "hero" ? 1 : 0.35;
   return (
-    // Offset right so the graph sits behind the stat tiles rather than behind
-    // the headline — the copy column stays clean, the scene stays visible.
-    <group position={[3.05, 0, 0]} scale={0.95}>
-      <ParallaxRig animate={animate}>
-        <KnowledgeGraph color={color} animate={animate} />
-        <CoreShell color={color} animate={animate} />
+    <group position={position} scale={scale}>
+      <ParallaxRig animate={animate && variant === "hero"}>
+        <KnowledgeGraph color={color} animate={animate} opacity={opacity} />
+        <CoreShell color={color} animate={animate} opacity={opacity} />
       </ParallaxRig>
     </group>
   );
@@ -168,9 +190,11 @@ function Scene({ accent, animate }: { accent: string; animate: boolean }) {
 export default function HeroScene({
   accent = "#a78bfa",
   animate = true,
+  variant = "hero",
 }: {
   accent?: string;
   animate?: boolean;
+  variant?: SceneVariant;
 }) {
   return (
     <Canvas
@@ -181,7 +205,7 @@ export default function HeroScene({
       // Reduced motion → render a single static frame instead of a rAF loop.
       frameloop={animate ? "always" : "demand"}
     >
-      <Scene accent={accent} animate={animate} />
+      <Scene accent={accent} animate={animate} variant={variant} />
     </Canvas>
   );
 }
