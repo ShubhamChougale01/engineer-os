@@ -18,6 +18,10 @@ export interface Skill {
   description: string;
   categoryId: string;
   status: ContentStatus;
+  /** react-icons/si export name (e.g. "SiPython") for skills that are a
+   *  real product/brand. Undefined for conceptual skills with no logo —
+   *  callers fall back to the parent category's emoji. */
+  icon?: string;
 }
 
 export interface Category {
@@ -344,10 +348,73 @@ const RAW: { category: Category; skills: SkillSeed[] }[] = [
   },
 ];
 
+// Only skills that are an actual product/brand get a logo here — every name
+// below was verified against react-icons' bundled Simple Icons export list
+// before being added. Conceptual skills (RAG, Reflection, Attention, ...)
+// intentionally have no entry and fall back to their category's emoji.
+const SKILL_ICONS: Record<string, string> = {
+  python: "SiPython",
+  javascript: "SiJavascript",
+  typescript: "SiTypescript",
+  go: "SiGo",
+  rust: "SiRust",
+  cpp: "SiCplusplus",
+  fastapi: "SiFastapi",
+  django: "SiDjango",
+  flask: "SiFlask",
+  express: "SiExpress",
+  "spring-boot": "SiSpringboot",
+  nodejs: "SiNodedotjs",
+  nestjs: "SiNestjs",
+  postgresql: "SiPostgresql",
+  mysql: "SiMysql",
+  mongodb: "SiMongodb",
+  redis: "SiRedis",
+  neo4j: "SiNeo4J",
+  elasticsearch: "SiElasticsearch",
+  clickhouse: "SiClickhouse",
+  sqlite: "SiSqlite",
+  milvus: "SiMilvus",
+  qdrant: "SiQdrant",
+  graphql: "SiGraphql",
+  jwt: "SiJsonwebtokens",
+  linux: "SiLinux",
+  "owasp-top-10": "SiOwasp",
+  gcp: "SiGooglecloud",
+  docker: "SiDocker",
+  kubernetes: "SiKubernetes",
+  terraform: "SiTerraform",
+  "github-actions": "SiGithubactions",
+  jenkins: "SiJenkins",
+  git: "SiGit",
+  kafka: "SiApachekafka",
+  rabbitmq: "SiRabbitmq",
+  prometheus: "SiPrometheus",
+  grafana: "SiGrafana",
+  opentelemetry: "SiOpentelemetry",
+  langchain: "SiLangchain",
+  langgraph: "SiLanggraph",
+  crewai: "SiCrewai",
+  mcp: "SiModelcontextprotocol",
+  vllm: "SiVllm",
+  ollama: "SiOllama",
+  mlflow: "SiMlflow",
+  wandb: "SiWeightsandbiases",
+  airflow: "SiApacheairflow",
+  spark: "SiApachespark",
+  "claude-code": "SiClaudecode",
+  "pydantic-ai": "SiPydantic",
+};
+
 export const CATEGORIES: Category[] = RAW.map((r) => r.category);
 
 export const SKILLS: Skill[] = RAW.flatMap((r) =>
-  r.skills.map((sk) => ({ ...sk, status: sk.status ?? "todo", categoryId: r.category.id })),
+  r.skills.map((sk) => ({
+    ...sk,
+    status: sk.status ?? "todo",
+    categoryId: r.category.id,
+    icon: SKILL_ICONS[sk.slug],
+  })),
 );
 
 export const SKILL_BY_SLUG: Record<string, Skill> = Object.fromEntries(

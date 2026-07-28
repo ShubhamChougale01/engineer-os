@@ -11,6 +11,7 @@ import type { CheatSheetData } from "@/content/cheatsheets/types";
 import { useBookmarks, useLastVisited, useProgress } from "@/lib/storage";
 import { CheatSheetModal } from "./CheatSheetModal";
 import { Markdown } from "./Markdown";
+import { SkillIcon } from "./SkillIcon";
 import { StatusBadge } from "./StatusBadge";
 
 /**
@@ -178,6 +179,11 @@ export function SkillDetail({
         </div>
 
         <div className="mb-1 flex items-center gap-3">
+          <SkillIcon
+            icon={skill.icon}
+            fallback={CATEGORY_BY_ID[skill.categoryId]?.emoji ?? ""}
+            className="h-7 w-7 shrink-0 text-ink-muted"
+          />
           <h1 className="text-3xl font-semibold tracking-tight">{skill.name}</h1>
           <StatusBadge status={skill.status} />
           <button
