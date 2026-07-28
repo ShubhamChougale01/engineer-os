@@ -24,8 +24,8 @@ export default function BookmarksPage() {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {skills.map((s) => (
-            <SkillCard key={s.slug} skill={s} />
+          {skills.map((s, i) => (
+            <SkillCard key={s.slug} skill={s} index={i} />
           ))}
         </div>
       )}

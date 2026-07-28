@@ -17,6 +17,7 @@ import {
   UserCircle,
   X,
 } from "lucide-react";
+import { AmbientCanvas } from "./AmbientCanvas";
 import { CommandPalette } from "./CommandPalette";
 import { VisitorCounter } from "./VisitorCounter";
 import { useAuth } from "@/lib/auth";
@@ -116,8 +117,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   });
 
+  const isDashboard = pathname === "/";
+  // The skill detail route already loads mermaid + react-markdown + a large
+  // content file — skip the decorative canvas there so its cold compile and
+  // runtime cost stay dedicated to actual content.
+  const isSkillDetail = pathname.startsWith("/skills/");
+
   return (
     <div className="flex min-h-screen">
+      {/* Every other route gets a faded version of the hero's knowledge-graph
+          as a background texture; the dashboard already has its own
+          full-strength scene inside the hero section. */}
+      {!isDashboard && !isSkillDetail && <AmbientCanvas />}
+
       {/* Sidebar (desktop) */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface px-4 py-6 md:flex">
         <Link href="/" className="mb-8 flex items-center gap-2 px-2">

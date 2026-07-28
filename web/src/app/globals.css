@@ -201,6 +201,31 @@ body {
   }
 }
 
+/* App-wide ambient background: the same knowledge-graph scene as the
+   dashboard hero, centered and faded, mounted once behind every route so
+   navigating away from the dashboard doesn't go visually flat. */
+.ambient-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.6;
+  -webkit-mask-image: radial-gradient(circle at 50% 32%, black 0%, transparent 70%);
+  mask-image: radial-gradient(circle at 50% 32%, black 0%, transparent 70%);
+}
+.ambient-canvas canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+@media (max-width: 767px) {
+  /* Keep mobile lean rather than rendering an always-on WebGL scene behind
+     content that's rarely visible on a small viewport anyway. */
+  .ambient-canvas {
+    display: none;
+  }
+}
+
 /* ---------- 3D surface system ---------- */
 
 /* Raised card: soft ambient shadow + top highlight edge + subtle gloss sheen */
@@ -331,4 +356,17 @@ body {
 /* Thin scrollbars for TOC */
 .toc-scroll {
   scrollbar-width: thin;
+}
+
+/* Consistent keyboard-focus ring app-wide — visible only for keyboard
+   navigation (:focus-visible), never on mouse click. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgb(var(--accent) / 0.7);
+  outline-offset: 2px;
+  border-radius: 4px;
 }

@@ -93,8 +93,8 @@ export default function Dashboard() {
             Continue learning
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {continueLearning.map((s) => (
-              <SkillCard key={s.slug} skill={s} />
+            {continueLearning.map((s, i) => (
+              <SkillCard key={s.slug} skill={s} index={i} />
             ))}
           </div>
         </section>
@@ -110,8 +110,8 @@ export default function Dashboard() {
               .map((slug) => SKILL_BY_SLUG[slug])
               .filter((s) => s && !isDisabled(s.slug))
               .slice(0, 6)
-              .map((s) => (
-                <SkillCard key={s.slug} skill={s} />
+              .map((s, i) => (
+                <SkillCard key={s.slug} skill={s} index={i} />
               ))}
           </div>
         </section>

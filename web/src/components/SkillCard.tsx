@@ -7,17 +7,22 @@ import { TEMPLATE } from "@/data/template";
 import { useBookmarks, useProgress } from "@/lib/storage";
 import { StatusBadge } from "./StatusBadge";
 
-export function SkillCard({ skill }: { skill: Skill }) {
+export function SkillCard({ skill, index = 0 }: { skill: Skill; index?: number }) {
   const { isBookmarked, toggle } = useBookmarks();
   const { progress } = useProgress();
   const done = progress[skill.slug]?.length ?? 0;
   const pct = Math.round((done / TEMPLATE.length) * 100);
   const bookmarked = isBookmarked(skill.slug);
+  // Cap the stagger so a long grid doesn't leave the last row waiting seconds
+  // to appear — it wraps every 8 cards instead of growing unbounded.
+  const delay = (index % 8) * 0.05;
 
   return (
     <div
       className="surface-3d surface-3d-hover group relative rounded-2xl p-4 transition-all duration-300"
-      style={{ animation: "reveal-up 0.6s cubic-bezier(0.22,1,0.36,1) forwards" }}
+      style={{
+        animation: `reveal-up 0.6s cubic-bezier(0.22,1,0.36,1) ${delay}s both`,
+      }}
     >
       <div className="mb-1 flex items-start justify-between gap-2">
         <Link
