@@ -1,955 +1,1401 @@
 import type { SkillContent } from "../types";
 
+/**
+ * AutoGen — full 50-section knowledge page.
+ * Note: code blocks use ~~~ fences (CommonMark-equivalent to backtick fences)
+ * so this file needs no backtick escaping inside the template literals.
+ */
 const autogen: SkillContent = {
   overview: `
-AutoGen is Microsoft's open-source, research-originated framework for multi-agent orchestration, distinguished by its **conversation-centric** design philosophy: rather than modeling agent collaboration as an explicit graph (**LangGraph**) or a role/task/crew hierarchy (**CrewAI**) or lightweight handoffs (**OpenAI Agents SDK**), AutoGen models multi-agent collaboration as a **structured conversation** between agents — each agent is fundamentally a "conversable" participant that sends and receives messages, with the overall workflow emerging from the pattern of message exchange between agents rather than from an externally-imposed graph or role hierarchy.
+AutoGen is Microsoft's open-source framework for building multi-agent LLM applications around a **conversation-driven** model: instead of a fixed pipeline of tasks or a hand-wired graph, you define a set of agents that exchange messages in a shared conversation, and the system's behavior emerges from that back-and-forth. The foundational primitive is the **ConversableAgent** — an agent that can both send and receive messages, optionally generate replies with an LLM, optionally execute code, and optionally hand control to a human. Two common specializations sit on top of it: an **AssistantAgent** (an LLM-backed agent that reasons and, where wired for it, writes code) and a **UserProxyAgent** (an agent that represents a human or an automated executor, capable of running code the assistant produces and relaying real or simulated human feedback). For conversations among more than two agents, **GroupChat** and its **GroupChatManager** coordinate turn-taking among a roster of agents.
 
-AutoGen's core abstractions reflect this conversation-first framing: a **ConversableAgent** is the base building block, capable of generating replies and optionally invoking tools; a common, particularly influential pattern is pairing an **AssistantAgent** (an LLM-powered agent producing responses/code) with a **UserProxyAgent** (representing a human or an automated proxy that can execute code and provide feedback, directly connecting to **Agent Fundamentals**' human-in-the-loop concept); and **GroupChat** coordinates conversation among more than two agents, with a **GroupChatManager** determining which agent speaks next. This conversational framing has proven particularly well-suited to code-generation and code-execution workflows, where an assistant proposes code and a user-proxy agent actually executes it and reports results back.
+For an AI engineer, AutoGen matters because it was one of the first widely-adopted frameworks to take "let agents talk to each other" seriously as a general-purpose orchestration mechanism, rather than treating multi-agent collaboration as a special case bolted onto a single-agent loop. Where CrewAI models a small team of specialists executing declared tasks, and LangGraph models an explicit graph/state machine you wire node by node, AutoGen models a **conversation**: a shared message history that every participating agent can read, reply to, and reason about, with control flow expressed as "who speaks next" rather than "which task or node executes next." That framing is powerful for problems whose natural shape is dialogue — a coder and a critic iterating on a solution, a planner and executors negotiating a plan, a human periodically stepping in to redirect — and considerably less natural for problems that are really a fixed, known sequence of steps in disguise.
 
-Key characteristics: **conversable agents**, the fundamental message-passing building block; **the assistant/user-proxy pairing**, directly enabling automated code generation-execution-feedback loops; **GroupChat**, coordinating multi-agent conversations beyond simple pairs; **code execution as a first-class capability**, distinguishing AutoGen's practical emphasis from other frameworks' more general tool-use framing; and **flexible conversation patterns**, letting engineers define custom speaker-selection and termination logic for genuinely complex multi-agent dialogues.
+Key characteristics: agents communicate through structured messages (a role, content, and optional function/tool-call payload) rather than through declared task inputs/outputs; a ConversableAgent's reply behavior is pluggable — it can call an LLM, execute code in a sandboxed environment, defer to a human, or run custom reply functions, and these can be chained; conversations have configurable **termination conditions** (a max number of turns, a specific phrase in a message, a custom function) because an open-ended conversation has no natural stopping point on its own; and code execution is a first-class citizen of the framework, not an add-on tool, reflecting AutoGen's origin in automating exactly the kind of "write code, run it, look at the output, fix it" loop a human developer performs. It is worth being upfront that AutoGen's architecture has evolved substantially — from the original single-package AutoGen, through a significant "AutoGen 0.4" rearchitecture into a layered Core/AgentChat/Extensions design, alongside a community-maintained fork (AG2) that split off after a governance disagreement — so treat any specific class name or import path in this page as illustrative of the framework's durable ideas rather than a permanently pinned API; always check current documentation before shipping.
 `,
 
   history: `
+AutoGen originated at **Microsoft Research** and was released as an open-source framework in **2023**, alongside a widely-read paper, "AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation" (Wu et al., 2023), that formalized the conversation-driven multi-agent idea and demonstrated it across coding, question-answering, and decision-making tasks. It arrived in the same general period as CrewAI, LangGraph's early versions, and a wave of autonomous-agent experiments (AutoGPT, BabyAGI), all wrestling with the same underlying question — how do you get more than one LLM call to cooperate on a task larger than any single call can handle — but AutoGen's specific answer was to let agents talk to each other in a shared chat, mirroring how a team of human engineers might actually solve a problem over Slack.
+
 | Year | Milestone |
 |------|-----------|
-| 2023 | **AutoGen** is released by Microsoft Research as an open-source framework, introducing its conversation-centric multi-agent design and gaining particular attention for its effectiveness at automated code-generation-and-execution workflows |
-| 2023–2024 | AutoGen's **GroupChat** abstraction is introduced, extending the framework beyond simple two-agent (assistant/user-proxy) conversations toward coordinated multi-agent group dialogues with configurable speaker-selection logic |
-| 2024 | **AutoGen Studio** is introduced as a lower-code/no-code interface for building and testing AutoGen-based multi-agent systems, broadening accessibility beyond pure code-based configuration |
-| 2024 | A significant **architectural restructuring (AutoGen 0.4 / "AgentChat")** introduces a more modular, extensible core, addressing some scalability and maintainability concerns from the framework's original, more monolithic design |
-| 2024–2025 | Continued growth of AutoGen specifically within research-oriented and code-generation-heavy multi-agent use cases, alongside continued refinement of its conversational abstractions and integration with Microsoft's broader AI tooling ecosystem |
+| 2023 | Initial public release from Microsoft Research; the founding AutoGen paper formalizes ConversableAgent, multi-agent conversation, and code-execution-centric workflows |
+| 2023-2024 | Rapid community adoption; GroupChat and GroupChatManager introduced for coordinating conversations among more than two agents; strong early use in coding-assistant and data-analysis workflows |
+| 2024 | Governance tension within the community leads to **AG2** (originally "AutoGen" spelled differently in some community discussion), a community-maintained fork continuing development of the original architecture under separate stewardship, while Microsoft continues AutoGen development in parallel |
+| Late 2024 - 2025 | Microsoft ships a substantial rearchitecture, informally called **AutoGen 0.4**, splitting the framework into a layered design: a low-level **Core** (event-driven, actor-model-style agent runtime), a higher-level **AgentChat** API (the more approachable, ConversableAgent-like layer most tutorials use), and **Extensions** for integrations — explicitly addressing feedback that the original single-layer design conflated a general-purpose agent runtime with a specific conversational-agent convenience API |
+| 2025 | Continued development of both AutoGen (Microsoft) and AG2 (community fork) in parallel, with Microsoft also shipping **Magentic-One**, a related multi-agent system built on AutoGen's Core runtime aimed at general-purpose web/file/code task completion, illustrating the framework's role as an underlying substrate for higher-level agent products, not only a library end users wire up directly |
 
-AutoGen's history directly reflects its origins as a MICROSOFT RESEARCH project — its conversation-centric design and particular strength in code-generation workflows trace back to research questions about how multiple LLM-powered agents can collaborate through natural, flexible dialogue, distinct from the more product-oriented, opinionated design paths taken by **LangGraph**, **CrewAI**, and the **OpenAI Agents SDK**.
+The AutoGen 0.4 rearchitecture is worth internalizing as a signal in its own right: it reflects the same lesson visible across the whole agent-framework space — a framework that starts as one convenient, opinionated layer (ConversableAgent doing everything: messaging, LLM calls, code execution, human-in-the-loop) tends to eventually split into a lower-level runtime plus a higher-level convenience API, once enough production users need more control over the runtime than the original single layer exposed. The CrewAI skill covers an analogous split (Flows arriving as a more deterministic layer above Crews); it is a recurring pattern, not an AutoGen-specific quirk.
 `,
 
   "why-it-exists": `
-AutoGen exists because a genuinely common and valuable multi-agent pattern — an AI assistant proposing a solution (often code), a separate process actually EXECUTING that proposal and reporting back real results, and the assistant iteratively refining its approach based on this feedback — is naturally modeled as a CONVERSATION between two (or more) distinct participants, directly extending **Agent Fundamentals**' plan-act-observe loop into an explicitly multi-participant dialogue rather than a single agent's internal loop.
+Before conversation-driven frameworks like AutoGen, teams building multi-step, collaborative LLM workflows faced a narrower, less legible set of options:
 
-AutoGen solves this by providing CONVERSABLE AGENTS as its fundamental abstraction, with the particularly influential assistant/user-proxy pairing directly supporting automated code-generation-execution-feedback loops, and GROUPCHAT extending this conversational model to coordinate more than two participants — giving engineers a framework specifically well-suited to workflows that genuinely resemble a back-and-forth dialogue between distinct, collaborating agents, rather than a more rigid graph or role-hierarchy structure.
+1. **A single agent doing everything in one loop.** Asking one agent to plan, write code, execute it, critique its own output, and revise conflates several distinct cognitive modes into one context and one set of instructions — a pattern that tends to produce weaker self-critique than having a genuinely separate "critic" perspective, because a single model reasoning about its own output in the same context lacks the friction of an actually distinct viewpoint pushing back.
+2. **Hand-rolled multi-call orchestration**, where an engineer writes bespoke Python to call an LLM, parse its output, decide whether to call it again, and manage state across calls — functional but reinventing the same plumbing (message history management, turn-taking logic, termination conditions) every team needs for any genuinely iterative, back-and-forth workflow.
+3. **Rigid, declarative task pipelines** with no room for open-ended back-and-forth: fine when the division of labor and number of steps is known in advance, but a poor fit for workflows whose natural shape is "iterate until this is actually correct" — a coder and a code-executing critic going back and forth an unknown number of times until tests pass, for instance.
+
+AutoGen existed to give that specific, recurring shape — an open-ended, potentially multi-turn conversation among two or more agents (and possibly a human), where the number of exchanges isn't fixed in advance and the point is for the agents' perspectives to genuinely interact — a first-class, general-purpose abstraction. Rather than modeling collaboration as a sequence of discrete tasks with declared inputs/outputs (CrewAI's model) or as a graph of nodes and edges you wire explicitly (LangGraph's model), AutoGen modeled it as a chat: agents send messages into a shared history, and any agent (or the human) can reply, making the framework a natural fit for the "write code, run it, see what breaks, fix it, repeat" workflow the original paper leaned on heavily as its motivating example.
 `,
 
   "problem-it-solves": `
-AutoGen addresses the **"how do we model and orchestrate multi-agent collaboration that genuinely resembles a flexible, back-and-forth conversation, particularly for code-generation-and-execution workflows"** challenge.
+AutoGen removes concrete, recurring pains in building conversation-shaped, iterative multi-agent systems:
 
-Concretely, AutoGen's abstractions provide:
+- **Ad hoc message-history management.** ConversableAgent tracks the running conversation per pair or group of agents automatically, so you don't hand-roll your own list-of-messages bookkeeping and prompt-assembly logic for every new multi-agent workflow.
+- **Turn-taking and termination logic.** Deciding who speaks next (in a GroupChat) and when a conversation should stop (a max-turn count, a termination phrase like "TERMINATE," a custom check function) are first-class, configurable concerns rather than something every team re-implements from scratch.
+- **Code execution as a native capability, not a bolted-on tool.** A UserProxyAgent can execute code blocks an AssistantAgent produces (in a sandboxed environment, ideally Docker-backed) and feed the results — including errors — back into the conversation automatically, which is exactly the "write, run, observe, fix" loop a human developer performs, without custom glue code per project.
+- **Human-in-the-loop as a configurable spectrum, not an all-or-nothing switch.** A UserProxyAgent's human_input_mode can require human approval on every turn, only when the agent is uncertain, or never (fully automated) — letting the same agent definitions serve prototyping (heavy human oversight) and production automation (none) without rewriting the workflow.
+- **A general substrate for "agents cooperating via dialogue"** applicable well beyond coding — debate/critique patterns, multi-perspective analysis, negotiation-style workflows — where the useful signal genuinely comes from distinct agents' perspectives colliding, not from executing a known sequence of tasks.
 
-- **ConversableAgents**, a flexible, message-passing base abstraction directly supporting a wide variety of multi-agent dialogue patterns.
-- **The assistant/user-proxy pairing**, directly enabling automated code-generation, execution, and feedback loops — a particularly well-suited pattern for coding-assistant applications, extending **Agent Fundamentals**' tool-use concept to treat CODE EXECUTION itself as a first-class capability.
-- **GroupChat and GroupChatManager**, coordinating conversation among more than two agents with configurable speaker-selection logic, directly extending **Agent Fundamentals**' multi-agent decomposition concept to genuinely dialogue-based (rather than graph- or role-based) coordination.
-- **Human-in-the-loop integration via UserProxyAgent**, directly connecting to **Agent Fundamentals**' own autonomy-level treatment — a user-proxy agent can be configured to require human input at specific points in the conversation.
+What AutoGen deliberately does **not** solve, or solves only partially:
 
-What AutoGen does **not** solve, or solves only partially: its conversation-centric model, while flexible, can be less STRUCTURALLY explicit than LangGraph's graph model for workflows requiring precise, deterministic conditional branching (a conversation's flow emerges from agent message-generation, which is less directly inspectable/controllable than an explicit graph's nodes and edges); and it inherits every underlying reliability challenge covered throughout the LLMs category (hallucination compounding across a multi-agent conversation, directly connecting to **Agent Fundamentals**' own compounding-error treatment).
+- **Guaranteed termination or bounded cost.** An open-ended conversation has no natural stopping point; without carefully configured termination conditions, AutoGen conversations can loop indefinitely (or until an arbitrary max-turn ceiling), burning tokens with no guarantee of convergence — this is arguably the single most important operational caveat of the whole framework, covered at length in Anti-Patterns and Common Mistakes.
+- **Precise, deterministic control flow.** If your workflow is really a fixed sequence of known steps, or needs exact conditional branching over explicit state, a graph-first tool like LangGraph gives you that control directly; AutoGen's conversational model trades that precision for flexibility, and forcing a deterministic pipeline into a conversational frame usually adds unpredictability without a corresponding benefit.
+- **Guaranteed productive disagreement.** Multiple agents "talking" does not automatically produce useful critique — left unguided, two LLM-backed agents frequently agree with each other quickly and confidently regardless of whether the shared conclusion is actually correct, a well-documented failure mode discussed under Advanced Concepts and Anti-Patterns.
 `,
 
   "learning-objectives": `
 By the end of this page you should be able to:
 
-1. Explain AutoGen's conversation-centric design philosophy and its core ConversableAgent abstraction.
-2. Construct a simple assistant/user-proxy pair implementing a code-generation-execution-feedback loop.
-3. Configure a GroupChat coordinating conversation among more than two agents.
-4. Explain how AutoGen's UserProxyAgent implements Agent Fundamentals' human-in-the-loop concept.
-5. Compare AutoGen's conversational model against LangGraph's explicit graph model and CrewAI's role-based model.
-6. Recognize AutoGen anti-patterns: unbounded conversation turns, and unsafe automatic code execution.
-7. Answer senior-level interview questions on AutoGen's conversational architecture and its tradeoffs versus alternative frameworks.
+1. Explain AutoGen's conversation-driven mental model and how it differs from CrewAI's role/task/process model and LangGraph's explicit graph/state-machine model.
+2. Construct a ConversableAgent, and explain how AssistantAgent and UserProxyAgent specialize it for LLM-driven reasoning versus human/code-execution representation respectively.
+3. Configure code execution safely (sandboxed, ideally Docker-backed) and trace how generated code, its execution result, and any errors flow back into the conversation.
+4. Configure human-in-the-loop behavior via human_input_mode and explain the tradeoffs of each setting across prototyping and production.
+5. Wire a GroupChat with a GroupChatManager for conversations among more than two agents, and reason about speaker-selection strategies.
+6. Configure termination conditions correctly, and explain why an unbounded conversation is a real operational risk, not a theoretical one.
+7. Diagnose and prevent the two classic conversation-driven failure modes: conversations that loop without terminating, and agents converging on agreement without genuine progress.
+8. Reason honestly about AutoGen's layered architecture (Core, AgentChat, Extensions) and the existence of the AG2 community fork, and know that exact APIs have shifted across versions.
+9. Decide, for a concrete scenario, whether conversation-driven orchestration is worth its unpredictability and cost compared to CrewAI's task-based model, LangGraph's graph model, or a single well-tooled agent.
+10. Operate an AutoGen-based system in production: cost/turn-count monitoring, timeouts, sandboxed code execution, and a testing strategy for non-deterministic multi-turn conversations.
 `,
 
   prerequisites: `
-- **Required**: **Agent Fundamentals** (the multi-agent decomposition and human-in-the-loop concepts AutoGen concretely implements via its conversational model), **Guardrails** (relevant to AutoGen's code-execution safety considerations).
-- **Very helpful**: familiarity with **LangGraph** and **CrewAI**, providing useful comparative context for AutoGen's distinctly conversational design.
+- **Required**: comfortable Python (classes, async, context managers — see the **Python** skill); a solid understanding of the single-agent reason-act-observe loop and tool/function calling — see the **Agent Fundamentals** and **Tool Calling** skills first, since every AutoGen agent's individual turn is fundamentally that same loop, just embedded in a multi-agent conversation.
+- **Required conceptually**: what a chat-completion message history is (role, content, optional function-call payload) — AutoGen's entire mental model is built directly on top of that primitive, extended to more than two participants.
+- **Strongly recommended**: the **Planning** skill, since GroupChat speaker-selection and multi-agent task decomposition overlap heavily with general agentic-planning concerns and failure modes.
+- **Strongly recommended**: the **Reflection** skill, since AutoGen's critic/reviewer conversational patterns (an agent that checks another agent's work and asks for revisions) are a direct application of the reflection pattern, and understanding reflection's known limits (agents that "agree" rather than genuinely critique) directly explains one of AutoGen's most cited failure modes.
+- **Helpful for the comparisons section**: the **CrewAI**, **LangGraph**, and **OpenAI Agents SDK** skills — this page assumes at least a skim of those alternatives so the comparison table and honest tradeoff discussion land rather than reading as unfamiliar jargon.
+- **Helpful, if you plan to enable code execution**: basic familiarity with Docker, since sandboxed code execution is the responsible default and unsandboxed local execution is a real security risk covered in Security.
 
-Dependency chain: **Agent Fundamentals** → **LangChain** → **LangGraph** → **CrewAI** → **OpenAI Agents SDK** → this page (AutoGen) → **Agent Memory** and the remaining capability-focused skills.
+Dependency chain on this platform: **Python** → **Tool Calling** → **Agent Fundamentals** → **Planning** / **Reflection** → **this page** → **CrewAI** / **LangGraph** / **OpenAI Agents SDK** for the broader multi-agent orchestration landscape.
 `,
 
   "beginner-concepts": `
-### A simple assistant/user-proxy pair
+### ConversableAgent: the foundational primitive
+
+Every agent in AutoGen is, underneath, a **ConversableAgent** — an object that can send and receive messages, and that has pluggable logic for how it generates a reply (an LLM call, executing code, asking a human, or a custom function):
 
 ~~~python
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import ConversableAgent
+
+agent = ConversableAgent(
+    name="generic_agent",
+    system_message="You are a helpful assistant.",
+    llm_config={"config_list": [{"model": "gpt-4o-mini"}]},
+    human_input_mode="NEVER",   # never pause for a human reply
+)
+~~~
+
+In practice you rarely instantiate a bare ConversableAgent directly for a full workflow — you use one of its two common specializations, AssistantAgent and UserProxyAgent — but understanding that both are built on the same base class explains why they can talk to each other symmetrically: an AssistantAgent's "send" and a UserProxyAgent's "receive" are the same underlying mechanism.
+
+### AssistantAgent: the LLM-backed reasoner
+
+~~~python
+from autogen import AssistantAgent
 
 assistant = AssistantAgent(
     name="assistant",
-    system_message="You are a helpful coding assistant.",
-    llm_config={"model": "gpt-4"},
+    system_message=(
+        "You are a helpful AI coding assistant. Write Python code to "
+        "solve the given task. Reply 'TERMINATE' when the task is "
+        "fully complete and verified."
+    ),
+    llm_config={"config_list": [{"model": "gpt-4o-mini"}]},
 )
-user_proxy = UserProxyAgent(
-    name="user_proxy",
-    human_input_mode="NEVER",  # fully automated, no human
-                                 # prompt at each turn
-    code_execution_config={"work_dir": "coding", "use_docker": False},
-)
-
-user_proxy.initiate_chat(assistant, message="Write and run a Python script that prints the first 10 Fibonacci numbers.")
 ~~~
 
-The assistant PROPOSES code, and the user-proxy agent EXECUTES it (directly extending **Agent Fundamentals**' tool-use concept, treating code execution itself as a tool) and reports the actual result back to the assistant — directly implementing a plan-act-observe loop, but with the "acting" and "observing" happening through a genuinely distinct, second conversational participant rather than within a single agent's own internal loop.
+An AssistantAgent's default reply behavior is an LLM call: given the conversation so far, generate the next message. It does not execute code itself — by design, AutoGen splits "propose code" (the assistant's job) from "run code" (the user proxy's job), mirroring a real code-review-style separation of concerns.
 
-### Why this differs from a single-agent tool-use loop
-
-~~~
-In a single-agent framework (LangChain's AgentExecutor, or the
-OpenAI Agents SDK's Agent), one agent decides on an action AND
-executes it (via a tool call) within its own internal loop.
-AutoGen's assistant/user-proxy pattern explicitly SEPARATES
-these roles into two distinct conversational participants --
-the assistant proposes, the user-proxy executes and reports
-back -- directly modeling this as an actual CONVERSATION
-between two parties rather than one agent's internal process.
-~~~
-
-### human_input_mode: connecting to Agent Fundamentals' autonomy levels
+### UserProxyAgent: the human/executor stand-in
 
 ~~~python
+from autogen import UserProxyAgent
+
 user_proxy = UserProxyAgent(
     name="user_proxy",
-    human_input_mode="ALWAYS",  # requires explicit human
-                                  # input/approval at every turn --
-                                  # directly implementing Agent
-                                  # Fundamentals' fully human-
-                                  # supervised autonomy tier
+    human_input_mode="TERMINATE",   # ask a human only when the
+                                     # conversation looks like it's ending
+    max_consecutive_auto_reply=10,  # hard cap on automatic replies
+    code_execution_config={
+        "work_dir": "coding",
+        "use_docker": True,          # sandboxed execution — do not
+                                      # disable this outside a trusted
+                                      # local dev environment
+    },
+    is_termination_msg=lambda msg: "TERMINATE" in msg.get("content", ""),
 )
 ~~~
 
-\`human_input_mode\` can be set to \`"NEVER"\` (fully autonomous), \`"ALWAYS"\` (fully human-supervised, directly implementing **Agent Fundamentals**' most conservative autonomy tier), or \`"TERMINATE"\` (human input requested only when the conversation would otherwise end) — directly, concretely implementing the platform's own autonomy-level spectrum.
+A UserProxyAgent represents either a real human (pausing for input according to human_input_mode) or an automated stand-in that can execute code blocks the assistant proposes and feed the result — stdout, stderr, or an exception traceback — back into the conversation as its next message.
+
+### Your first two-agent conversation
+
+~~~python
+result = user_proxy.initiate_chat(
+    assistant,
+    message="Write and run Python code to compute the 20th Fibonacci "
+            "number, then confirm the result.",
+)
+~~~
+
+Tracing this: user_proxy sends the task message; assistant replies with a proposed Python code block; user_proxy (with code_execution_config set) automatically extracts and runs that code in the sandbox, and sends the execution result back as its next message; assistant reads the result, and either confirms success (replying with a message containing "TERMINATE") or proposes a fix if something went wrong. This loop — propose, execute, observe, revise — repeats until a termination condition fires or max_consecutive_auto_reply is hit.
+
+### Why this differs from a single agent with a code-execution tool
+
+A single agent with a "run Python" tool can, in principle, do the same propose-execute-observe-revise loop internally. AutoGen's two-agent split makes that loop's structure explicit and inspectable at the message level (you can see exactly what was proposed, what was executed, and what came back, as discrete conversation turns) and cleanly separates "who is allowed to execute code" (the user proxy, which can also gate on human approval) from "who proposes code" (the assistant, which never executes anything itself) — a separation of concerns worth preserving even when you could technically collapse it into one agent with a tool.
 `,
 
   "intermediate-concepts": `
-### GroupChat: coordinating more than two agents
+### Configuring code execution safely
 
 ~~~python
-from autogen import GroupChat, GroupChatManager
+from autogen import UserProxyAgent
+from autogen.coding import DockerCommandLineCodeExecutor
 
-groupchat = GroupChat(
-    agents=[planner, coder, reviewer, user_proxy],
-    messages=[],
-    max_round=15,  # directly reuses Agent Fundamentals'
-                     # bounded-iteration safety-net guidance
+executor = DockerCommandLineCodeExecutor(
+    image="python:3.12-slim",
+    timeout=60,               # hard wall-clock cap per code execution
+    work_dir="coding",
 )
-manager = GroupChatManager(groupchat=groupchat, llm_config={"model": "gpt-4"})
-user_proxy.initiate_chat(manager, message="Build a script that analyzes this dataset.")
-~~~
 
-The \`GroupChatManager\` determines which agent speaks next at each turn (by default, using an LLM call to decide based on the conversation so far), directly analogous to a moderator in a human group discussion — a genuinely distinct coordination mechanism from **CrewAI**'s role/task/crew structure or **LangGraph**'s explicit graph edges.
-
-### Code execution safety: a first-class AutoGen concern
-
-~~~python
 user_proxy = UserProxyAgent(
     name="user_proxy",
-    code_execution_config={
-        "work_dir": "coding",
-        "use_docker": True,  # sandboxed execution -- directly
-                               # connects to the Guardrails
-                               # skill's own action-level
-                               # constraint guidance, applied
-                               # specifically to code execution
-    },
+    human_input_mode="NEVER",
+    code_execution_config={"executor": executor},
 )
 ~~~
 
-Since AutoGen's assistant/user-proxy pattern often involves AUTOMATICALLY EXECUTING model-generated code, sandboxing (e.g., via Docker) is a genuinely important safety practice, directly extending **Agent Fundamentals**' and **Guardrails**' action-level constraint guidance to this specific, code-execution context.
+The newer executor-object pattern (rather than a bare use_docker flag) makes the sandbox an explicit, inspectable, swappable component — you can point it at a container image with exactly the dependencies your workflow needs, and set a timeout that bounds how long any single generated snippet is allowed to run, which matters directly once code execution is driven by an LLM's own (occasionally buggy, occasionally slow) output rather than a human's.
 
-### Custom speaker-selection logic
-
-~~~python
-def custom_speaker_selection(last_speaker, groupchat):
-    if last_speaker is planner:
-        return coder
-    elif last_speaker is coder:
-        return reviewer
-    return planner  # cycle back for revision, directly
-                      # analogous to LangGraph's own cycle concept
-
-groupchat = GroupChat(agents=[...], messages=[], speaker_selection_method=custom_speaker_selection)
-~~~
-
-This lets an engineer impose more DETERMINISTIC, explicit control over conversation flow, directly narrowing the gap between AutoGen's flexible conversational model and LangGraph's more explicit graph-based control when a specific workflow genuinely benefits from it.
-`,
-
-  "advanced-concepts": `
-### AutoGen's conversational model versus LangGraph's explicit graph model
-
-~~~
-AutoGen's DEFAULT speaker-selection (an LLM call deciding
-who speaks next based on the conversation) is genuinely
-FLEXIBLE and can adapt to unanticipated conversational
-directions, but is LESS STRUCTURALLY EXPLICIT and
-deterministic than LangGraph's graph model -- a senior
-engineer choosing between them weighs this flexibility-
-versus-explicitness tradeoff against the specific workflow's
-genuine need for adaptability versus precise, deterministic control.
-~~~
-
-### Nested chats: composing conversations hierarchically
-
-~~~
-AutoGen supports NESTED CHATS, where a single "turn" within
-an outer conversation can itself trigger an entire, separate
-inner conversation between a different set of agents (e.g.,
-a coder agent's turn might internally involve a nested
-debugging conversation with a specialized debugger agent) --
-directly analogous to LangGraph's subgraph concept (covered
-in the LangGraph skill), providing modularity within
-AutoGen's conversational framing.
-~~~
-
-### The AutoGen 0.4 / AgentChat architectural restructuring
-
-~~~
-AutoGen's more recent architectural evolution toward a more
-modular, extensible core (separating a lower-level "Core"
-layer from the higher-level "AgentChat" conversational
-abstractions) directly reflects the SAME kind of accumulated-
-practical-experience-driven evolution covered in the LangChain
-skill's own case study on LCEL's introduction -- even a
-well-established framework benefits from architectural
-evolution as genuine production experience reveals an
-earlier design's limitations.
-~~~
-
-### Bounding conversation length: a direct extension of Agent Fundamentals
-
-~~~
-GroupChat's max_round parameter, and individual agents'
-own conversation-termination conditions (e.g., a specific
-"TERMINATE" keyword the assistant is instructed to produce
-when a task is complete), directly implement Agent
-Fundamentals' loop-safety guidance at the level of an
-entire multi-agent CONVERSATION rather than a single
-agent's internal iteration count.
-~~~
-`,
-
-  "internal-working": `
-Tracing an assistant/user-proxy code-generation-execution loop:
-
-~~~mermaid
-sequenceDiagram
-    participant UserProxy as User Proxy Agent
-    participant Assistant as Assistant Agent
-    participant Sandbox as Code Execution Sandbox
-
-    UserProxy->>Assistant: initiate_chat("Write a script that...")
-    Assistant->>Assistant: generate proposed\nPython code
-    Assistant->>UserProxy: message containing\nproposed code
-    UserProxy->>Sandbox: execute the proposed\ncode (sandboxed)
-    Sandbox->>UserProxy: execution result\n(output or error)
-    UserProxy->>Assistant: message containing\nthe execution result
-    Assistant->>Assistant: if error: revise code;\nif success: report\ncompletion
-    Assistant->>UserProxy: final message\n(e.g., "TERMINATE")
-~~~
-
-1. **The user-proxy agent initiates the conversation**, sending the initial task description to the assistant agent.
-2. **The assistant agent generates a proposed response** (here, Python code), directly analogous to **Agent Fundamentals**' planning step.
-3. **The user-proxy agent EXECUTES this proposal** (directly the "act" step, treating code execution as a first-class capability) within a sandboxed environment, and reports the actual result back as the next conversational turn.
-4. **This cycle repeats** — the assistant revising its approach based on the observed execution result — until the assistant's own message indicates task completion (e.g., a designated termination signal), directly implementing **Agent Fundamentals**' plan-act-observe loop through an explicit, two-participant CONVERSATION.
-
-**Why this matters**: this trace demonstrates precisely how AutoGen's conversational framing implements the SAME foundational plan-act-observe loop covered in **Agent Fundamentals**, but with the "acting" and "observing" steps explicitly mediated through a second, distinct conversational participant (the user-proxy) rather than occurring within a single agent's own internal tool-calling mechanics.
-`,
-
-  architecture: `
-A senior AI engineer thinks about AutoGen architecture in terms of deliberately choosing conversational patterns (simple pairing versus GroupChat) matched to a task's genuine collaboration structure, and applying rigorous code-execution safety practices given AutoGen's particular strength in automated coding workflows.
-
-### Choosing a conversational pattern
-
-~~~mermaid
-flowchart TB
-    Task["A given multi-agent task"] --> Q{"Does the task involve\ncode generation and\nexecution feedback?"}
-    Q -->|Yes| Pairing["Assistant/User-Proxy pairing\n(with sandboxed execution)"]
-    Q -->|"No, but multiple\nspecialized agents\nneed to converse"| GroupChat["GroupChat with an\nappropriate speaker-\nselection strategy"]
-~~~
-
-### Applying rigorous code-execution safety
-
-A senior practitioner treats automated code execution (a distinguishing AutoGen capability) with the same rigor as any other high-risk agent action covered in **Agent Fundamentals** and **Guardrails** — sandboxing (e.g., via Docker), and considering \`human_input_mode="ALWAYS"\` for genuinely high-stakes execution contexts.
-`,
-
-  "data-flow": `
-Tracing a request through a GroupChat with a human-in-the-loop checkpoint:
-
-~~~mermaid
-sequenceDiagram
-    participant UserProxy as User Proxy (human_input_mode)
-    participant Manager as GroupChatManager
-    participant Planner
-    participant Coder
-    participant Reviewer
-
-    UserProxy->>Manager: initiate_chat("Build a data pipeline")
-    Manager->>Planner: select next speaker: Planner
-    Planner->>Manager: proposed plan
-    Manager->>Coder: select next speaker: Coder
-    Coder->>Manager: proposed implementation
-    Manager->>Reviewer: select next speaker: Reviewer
-    Reviewer->>Manager: review feedback\n(approve or request changes)
-    Manager->>UserProxy: if human_input_mode requires it,\nrequest explicit human review\nbefore finalizing
-    UserProxy->>Manager: approve (or provide\nfurther guidance)
-    Manager->>UserProxy: final result
-~~~
-
-The critical detail: the \`GroupChatManager\` dynamically selects the next speaker at each turn (by default via its own LLM-driven reasoning), and the user-proxy agent's \`human_input_mode\` configuration determines exactly when, if at all, genuine human review is required before the conversation concludes — directly implementing **Agent Fundamentals**' autonomy-level spectrum concretely within a multi-participant conversational structure.
-`,
-
-  "production-usage": `
-### A representative production AutoGen setup with sandboxed execution and bounded rounds
+### GroupChat: conversations among more than two agents
 
 ~~~python
 from autogen import AssistantAgent, UserProxyAgent, GroupChat, GroupChatManager
 
+coder = AssistantAgent(
+    name="coder",
+    system_message="You write Python code to solve the given task.",
+    llm_config={"config_list": [{"model": "gpt-4o-mini"}]},
+)
+critic = AssistantAgent(
+    name="critic",
+    system_message=(
+        "You review the coder's code and test results critically. "
+        "Point out concrete bugs, edge cases, or style issues; do not "
+        "simply agree if there is anything left to improve. Reply "
+        "'LGTM' only once the solution is genuinely complete."
+    ),
+    llm_config={"config_list": [{"model": "gpt-4o-mini"}]},
+)
 user_proxy = UserProxyAgent(
     name="user_proxy",
-    human_input_mode="TERMINATE",  # request human input only
-                                      # when the conversation would
-                                      # otherwise end -- a
-                                      # middle-ground autonomy tier
-    code_execution_config={"work_dir": "coding", "use_docker": True},
-    max_consecutive_auto_reply=10,  # directly reuses Agent
-                                       # Fundamentals' bounded-
-                                       # iteration guidance
+    human_input_mode="NEVER",
+    code_execution_config={"executor": executor},
 )
 
-groupchat = GroupChat(agents=[planner, coder, reviewer, user_proxy], messages=[], max_round=20)
-manager = GroupChatManager(groupchat=groupchat, llm_config={"model": "gpt-4"})
+groupchat = GroupChat(
+    agents=[user_proxy, coder, critic],
+    messages=[],
+    max_round=12,                       # hard ceiling on total turns
+    speaker_selection_method="auto",    # an LLM decides who speaks next
+)
+manager = GroupChatManager(
+    groupchat=groupchat,
+    llm_config={"config_list": [{"model": "gpt-4o-mini"}]},
+)
+
+user_proxy.initiate_chat(
+    manager,
+    message="Write a function that returns the nth Fibonacci number "
+            "efficiently, with tests, and have the critic review it.",
+)
 ~~~
 
-### Non-negotiables for production AutoGen applications
+The GroupChatManager is itself an agent whose job is orchestration: on each round, it decides (via speaker_selection_method) which agent in the roster speaks next, based on the conversation so far. speaker_selection_method="auto" delegates that choice to an LLM call, which is flexible but adds its own cost and unpredictability per round — round_robin (a fixed rotation) and manual (human-selected) are more predictable, cheaper alternatives worth defaulting to once a workflow's roster is stable and speaking order doesn't genuinely need to be dynamic.
 
-1. **Sandbox all automated code execution** (e.g., via Docker), directly reusing **Guardrails**' action-level constraint guidance for this specific, high-risk capability.
-2. **Bound conversation length explicitly** (\`max_round\`, \`max_consecutive_auto_reply\`), directly reusing **Agent Fundamentals**' loop-safety guidance.
-3. **Choose \`human_input_mode\` deliberately**, matched to the genuine stakes of the task, directly reusing **Agent Fundamentals**' autonomy-calibration guidance.
-4. **Design a clear termination signal/condition**, avoiding an unproductive, indefinite conversation.
-5. **Choose the appropriate conversational pattern** (simple pairing vs. GroupChat) matched to the task's genuine collaboration structure.
+### Termination conditions
 
-### Common production patterns
+~~~python
+def is_termination_msg(msg: dict) -> bool:
+    content = msg.get("content", "") or ""
+    return "TERMINATE" in content or "LGTM" in content
 
-- **Automated code-generation-execution-review pipelines**, leveraging AutoGen's particular strength in this exact use case.
-- **Multi-perspective GroupChat discussions**, coordinating specialized agents (planner, implementer, reviewer) toward a synthesized outcome.
-- **Human-in-the-loop code review**, using \`human_input_mode="ALWAYS"\` or \`"TERMINATE"\` for genuinely high-stakes code-execution contexts.
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    is_termination_msg=is_termination_msg,
+    max_consecutive_auto_reply=10,   # circuit breaker even if the
+                                      # termination phrase never appears
+)
+~~~
+
+Every AutoGen conversation needs an explicit way to stop: a termination phrase check (is_termination_msg), a hard turn ceiling (max_consecutive_auto_reply on an agent, or max_round on a GroupChat), or both together. Relying on a termination phrase alone is fragile — an LLM can fail to emit it, paraphrase it, or emit it prematurely — so production systems should always pair a phrase-based check with a hard numeric ceiling as a circuit breaker.
+
+### Custom reply functions
+
+~~~python
+def custom_reply(recipient, messages, sender, config):
+    last_message = messages[-1]["content"]
+    if "urgent" in last_message.lower():
+        return True, "Escalating to a human reviewer immediately."
+    return False, None   # fall through to the agent's default reply logic
+
+user_proxy.register_reply(
+    [AssistantAgent, None],
+    custom_reply,
+    position=0,   # checked before the default LLM-based reply logic
+)
+~~~
+
+register_reply lets you insert arbitrary Python logic into an agent's reply pipeline, checked in a defined order before falling back to the agent's default behavior — a common escape hatch for injecting business logic (routing, escalation, deterministic short-circuits) into what would otherwise be a purely LLM-driven conversation.
+
+### Nested chats
+
+An agent can, mid-conversation, kick off an entirely separate sub-conversation with a different set of agents and fold the result back in as its own reply — useful for a "consult a specialist sub-team, then continue the main conversation" pattern without permanently adding that specialist to the main roster. This is functionally similar to CrewAI composing smaller crews via a Flow, or a LangGraph subgraph — the recurring lesson being that nearly every multi-agent framework eventually needs a way to compose smaller conversations/graphs/crews into a larger pipeline, rather than putting every participant into one flat, ever-growing roster.
+`,
+
+  "advanced-concepts": `
+### The 0.4 layered architecture: Core, AgentChat, Extensions
+
+Microsoft's AutoGen rearchitecture split the framework into three layers, and understanding the split clarifies a lot about what each part is actually for:
+
+- **Core** — a lower-level, event-driven, actor-model-style runtime for agents that pass typed messages asynchronously, with no built-in assumption that "agent" means "LLM-backed chat participant." It exists so teams needing tighter control over the messaging runtime (custom routing, distributed execution, non-chat agent types) aren't stuck fighting a framework that only understands conversational agents.
+- **AgentChat** — the higher-level, approachable API most tutorials and this page's examples use: AssistantAgent, UserProxyAgent-equivalents, and GroupChat-style conversation patterns, built on top of Core. This is the layer that preserves the original ConversableAgent-style developer experience.
+- **Extensions** — integrations (model providers, tools, code executors) that plug into either layer.
+
+The practical upshot: if you're prototyping a conversational multi-agent workflow, you almost certainly want the AgentChat layer (or the community AG2 fork's equivalent, since AG2 continued the pre-0.4 architecture's philosophy under separate stewardship); reach for Core directly only once you have a concrete need — a non-chat agent topology, distributed deployment, custom message-routing logic — that AgentChat's opinionated conversational model doesn't accommodate.
+
+### Diagnosing "conversations that loop without terminating"
+
+This is the single most commonly reported operational AutoGen failure mode. Root causes, in rough order of frequency: (1) the termination-phrase check depends on an exact string the LLM sometimes fails to emit, paraphrases, or emits inside a larger sentence that a naive substring check misses; (2) no hard numeric ceiling (max_round / max_consecutive_auto_reply) is set at all, so a phrase-matching miss has no backstop; (3) a critic-style agent is instructed to "keep reviewing until perfect" with no operational definition of "perfect," so it can always find one more nitpick. The fix is layered, not single-point: always pair a termination-phrase check with a numeric ceiling, make the termination criterion in the system message as concrete and checkable as possible ("reply LGTM once all tests pass and no obvious bugs remain" rather than "reply LGTM when you are satisfied"), and log every conversation's actual turn count in production so silent creep toward the ceiling is visible before it becomes a cost incident.
+
+### Diagnosing "agents agreeing with each other without real progress"
+
+Two LLM-backed agents in conversation, especially when both are instructed to be broadly agreeable or lack a genuinely distinct perspective, frequently converge on shared conclusions quickly and confidently regardless of correctness — the multi-agent equivalent of groupthink, and closely related to the general limits of the reflection pattern covered in the **Reflection** skill (a model critiquing its own or a similar model's output does not reliably catch errors it wouldn't have caught reasoning alone). Signs this is happening: a critic agent's feedback across turns gets shorter and more generic ("looks good," "LGTM") rather than more specific as the conversation proceeds; the conversation terminates in very few rounds regardless of task difficulty; independently checking the final output against a ground truth or test suite reveals bugs the "critic" agent never flagged. Mitigations: give the critic agent an explicit, external, checkable rubric or test suite to run rather than relying on its own subjective judgment; use a genuinely different model (or a differently-prompted persona with real adversarial incentive, e.g. "your job is to find at least one concrete issue before approving") for the critic than for the producer; and, most reliably, wire in an actual external verifier (running tests, a static analyzer, a schema validator) rather than trusting a second LLM call to substitute for one.
+
+### Cost blowup from long group chats
+
+Every additional agent in a GroupChat and every additional round multiplies LLM calls, and speaker_selection_method="auto" adds a further LLM call per round just to decide who speaks next — a five-agent GroupChat with auto speaker selection running for ten rounds is easily dozens of LLM calls for what a well-scoped two-agent or single-agent design might accomplish in a handful. The senior habit: default to the smallest roster and the most restrictive speaker-selection method (round_robin, or an explicit allowed_or_disallowed_speaker_transitions constraint) that still accomplishes the task, and treat "auto" selection and an unconstrained large roster as choices that must be justified by a measured quality improvement, not adopted by default.
+
+### Constraining speaker transitions
+
+~~~python
+groupchat = GroupChat(
+    agents=[user_proxy, coder, critic],
+    messages=[],
+    max_round=12,
+    speaker_selection_method="auto",
+    allowed_or_disallowed_speaker_transitions={
+        user_proxy: [coder],     # user_proxy's message always goes to coder next
+        coder: [critic],         # coder's output always goes to critic next
+        critic: [coder, user_proxy],  # critic can send back to coder or end via user_proxy
+    },
+    speaker_transitions_type="allowed",
+)
+~~~
+
+Explicitly constraining which transitions are legal converts a fully emergent conversation into something closer to a lightweight state machine layered on top of the conversational model — a pragmatic middle ground when you know the rough shape of who should talk to whom but still want the LLM (rather than a rigid schedule) to decide message content and exact timing within that structure. Teams that find fully unconstrained auto speaker-selection too unpredictable in production frequently converge on exactly this pattern, which is functionally moving toward LangGraph's philosophy of explicit control without fully abandoning AutoGen's conversational primitives.
+
+### Decision table: when conversation-driven orchestration earns its cost
+
+| Situation | Recommendation |
+|-----------|-----------------|
+| The task's value genuinely comes from iterative back-and-forth (coder/critic, debate, negotiation) with an unknown number of rounds | AutoGen's conversational model is a strong fit |
+| The division of labor and step order are known in advance | A CrewAI-style task pipeline or a LangGraph graph will be cheaper and more predictable |
+| You need code generated, executed, and iteratively fixed based on real execution feedback | AutoGen's assistant/user-proxy code-execution loop is purpose-built for exactly this |
+| More than two or three agents need to participate with a fluid, dynamic speaking order | GroupChat with auto selection — but budget for real cost, and consider constraining transitions |
+| The "conversation" is really just three fixed steps in sequence | A fixed pipeline (CrewAI sequential process, or plain code) will be simpler and cheaper than modeling it as a chat |
+| Two agents keep agreeing quickly regardless of task difficulty | Add an external verifier (tests, rubric, schema check); don't trust a second LLM call alone as your quality gate |
+`,
+
+  "internal-working": `
+Tracing what actually happens inside a two-agent AutoGen conversation with code execution, step by step:
+
+~~~mermaid
+flowchart TB
+    S["user_proxy.initiate_chat(assistant, message)"] --> M1["Message 1: task description\nadded to shared history"]
+    M1 --> R1["assistant.generate_reply()\n-> LLM call over full history"]
+    R1 --> M2["Message 2: assistant's reply\n(may include a code block)"]
+    M2 --> C{"Does user_proxy's config\nauto-execute code?"}
+    C -->|yes| EX["Extract code block,\nrun in sandbox (Docker),\ncapture stdout/stderr/exception"]
+    EX --> M3["Message 3: execution result\nadded to shared history"]
+    M3 --> T{"is_termination_msg(M2)\nor max_consecutive_auto_reply\nreached?"}
+    C -->|no| H["Ask human for input\n(human_input_mode)"]
+    H --> M3
+    T -->|no| R1
+    T -->|yes| END["Conversation ends;\nfinal ChatResult returned"]
+~~~
+
+Step by step:
+
+1. **initiate_chat** sends the first message into a shared, ordered message history that both agents can see in full on every subsequent turn — there is no per-agent private context by default; both participants reason over the same growing transcript.
+2. **generate_reply** is called on the receiving agent, which (for an AssistantAgent) means an LLM call over the entire conversation history so far, formatted as a standard chat-completions-style message list.
+3. If the reply contains a recognizable code block and the receiving agent (typically the UserProxyAgent) is configured for code execution, that code is extracted and run in the configured executor (ideally a Docker sandbox with a timeout), and its result — including any exception traceback — becomes the next message in the shared history.
+4. If code execution isn't configured or applicable, and human_input_mode calls for it, the framework pauses for real human input, which likewise becomes the next message.
+5. Before generating the next reply, the framework checks termination conditions: is_termination_msg against the most recent message, and/or whether a turn-count ceiling (max_consecutive_auto_reply, or max_round in a GroupChat) has been reached. If not terminated, control returns to generate_reply on the other participant, and the loop continues.
+6. On termination, initiate_chat returns a ChatResult object containing the full message history, a summary (optionally LLM-generated), and cost/usage information for the whole conversation.
+
+For a **GroupChat**, the same loop runs with one additional step inserted before each reply: the GroupChatManager consults its speaker_selection_method (an LLM call for "auto", a fixed rotation for "round_robin", a human prompt for "manual", or a constraint check against allowed_or_disallowed_speaker_transitions) to decide which agent in the roster generates the next reply, meaning a GroupChat's per-round cost is strictly higher than a two-agent conversation's, since the speaker-selection decision itself frequently costs an LLM call.
+`,
+
+  architecture: `
+### Runtime architecture
+
+~~~mermaid
+flowchart TB
+    subgraph Convo["Conversation"]
+        Hist["Shared message history\n(role, content, function/tool payload)"]
+        subgraph Agents["Participants"]
+            AA["AssistantAgent\n(LLM-backed reasoner)"]
+            UP["UserProxyAgent\n(human/code-executor stand-in)"]
+            GCM["GroupChatManager\n(speaker selection, 3+ agents)"]
+        end
+    end
+    Agents -->|read/append| Hist
+    UP -->|extract + run| Executor["Code executor\n(Docker sandbox, timeout)"]
+    Executor -->|stdout/stderr/exception| Hist
+    UP -.->|human_input_mode| Human["Human operator"]
+    AA -->|chat/completion| LLMProv["LLM provider(s)"]
+    GCM -->|chat/completion, if auto| LLMProv
+    Convo --> Result["ChatResult:\nfull history + summary + usage/cost"]
+~~~
+
+The key architectural insight, mirrored across nearly every multi-agent framework covered on this platform: an AssistantAgent's or UserProxyAgent's individual turn is the same single-agent generate-a-reply step you'd build for a standalone agent — AutoGen's value-add is entirely in how it manages the shared conversation history, turn-taking, termination, and (optionally) code execution and human input across multiple such steps, not in a fundamentally different per-agent execution primitive.
+
+### Application layout for a production AutoGen service
+
+~~~
+codeassist/
+├── pyproject.toml
+├── src/codeassist/
+│   ├── agents.py            # AssistantAgent/UserProxyAgent definitions
+│   ├── groupchat.py         # GroupChat/GroupChatManager wiring,
+│   │                        # speaker-transition constraints
+│   ├── termination.py       # is_termination_msg logic + numeric ceilings
+│   ├── executors/           # sandboxed code-executor configuration
+│   ├── reply_functions/     # custom register_reply business logic
+│   ├── api/                 # FastAPI routes exposing /converse
+│   └── evaluation/          # golden-set tests over full conversations
+└── tests/
+~~~
+
+A recurring, hard-won production lesson (echoed across AutoGen, CrewAI, and LangGraph users alike): keep conversation rosters small and speaker-selection as constrained as the task allows (round_robin or explicit transition rules over unconstrained "auto" selection), and compose larger workflows out of smaller, well-scoped conversations (via nested chats or plain orchestration code) rather than building one large, ever-growing GroupChat with many participants and open-ended speaker selection.
+`,
+
+  "data-flow": `
+Tracing one GroupChat conversation end to end — a coder, a critic, and a code-executing user proxy collaborating on a small function, with the manager selecting speakers — as a sequence diagram:
+
+~~~mermaid
+sequenceDiagram
+    participant Caller
+    participant UP as UserProxyAgent
+    participant GCM as GroupChatManager
+    participant Coder as AssistantAgent: Coder
+    participant Critic as AssistantAgent: Critic
+    participant Exec as Code Executor
+    participant LLM as LLM API
+
+    Caller->>UP: initiate_chat(manager, message="write + test fib(n)")
+    UP->>GCM: message 1 (task)
+    GCM->>LLM: select next speaker
+    LLM-->>GCM: "coder"
+    GCM->>Coder: generate_reply(history)
+    Coder->>LLM: reasoning + code generation
+    LLM-->>Coder: proposed code block
+    Coder-->>GCM: message 2 (code)
+    GCM->>LLM: select next speaker
+    LLM-->>GCM: "user_proxy"
+    GCM->>UP: generate_reply(history)
+    UP->>Exec: run extracted code (sandboxed, timeout)
+    Exec-->>UP: stdout/stderr/exception
+    UP-->>GCM: message 3 (execution result)
+    GCM->>LLM: select next speaker
+    LLM-->>GCM: "critic"
+    GCM->>Critic: generate_reply(history)
+    Critic->>LLM: review code + result against a rubric
+    LLM-->>Critic: feedback or "LGTM"
+    Critic-->>GCM: message 4 (feedback)
+    GCM-->>UP: is_termination_msg(message 4)?
+    UP-->>Caller: ChatResult (if terminated) or loop continues
+~~~
+
+The most misunderstood part is that every arrow into an LLM box — including the speaker-selection call itself when using "auto" — is a separate network call with its own latency and cost, and a GroupChat's total cost scales with (number of rounds) times (roughly one reply call plus, for auto selection, one selection call) — a twelve-round GroupChat with three agents and auto selection can easily mean twenty or more LLM calls before a task is judged complete, which is the concrete, unavoidable cost side of the "let agents converse" pattern that must be weighed against its flexibility benefit for every use case (see Comparisons and Anti-Patterns).
+`,
+
+  "production-usage": `
+### A minimal but production-shaped two-agent coding conversation
+
+~~~python
+from autogen import AssistantAgent, UserProxyAgent
+from autogen.coding import DockerCommandLineCodeExecutor
+
+llm_config = {
+    "config_list": [{"model": "gpt-4o-mini", "timeout": 30}],
+    "temperature": 0.2,
+}
+
+assistant = AssistantAgent(
+    name="assistant",
+    system_message=(
+        "You write correct, tested Python code. Reply exactly "
+        "'TERMINATE' on its own line once tests pass and the task "
+        "is fully complete."
+    ),
+    llm_config=llm_config,
+)
+
+executor = DockerCommandLineCodeExecutor(
+    image="python:3.12-slim",
+    timeout=60,
+    work_dir="coding",
+)
+
+def is_termination_msg(msg: dict) -> bool:
+    return "TERMINATE" in (msg.get("content") or "")
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=8,   # hard circuit breaker
+    code_execution_config={"executor": executor},
+    is_termination_msg=is_termination_msg,
+)
+
+try:
+    result = user_proxy.initiate_chat(
+        assistant,
+        message="Write a function fib(n) with unit tests, run the "
+                "tests, and fix any failures.",
+    )
+except Exception as exc:
+    # A conversation is not transactional — several turns (and their
+    # cost) may have already happened even if the final call fails.
+    raise RuntimeError(f"AutoGen conversation failed: {exc}") from exc
+
+print(result.summary)
+print(result.cost)
+~~~
+
+Non-negotiables for production:
+
+1. **Always sandbox code execution** (Docker-backed executor, never bare local execution) — an LLM-generated snippet is untrusted input, and running it directly on a host process is a real security risk, not a hypothetical one (see Security).
+2. **Set a per-call LLM timeout and a per-execution sandbox timeout** — a hung LLM call or an infinite-looping generated script otherwise stalls the whole conversation indefinitely.
+3. **Always pair a termination-phrase check with a hard numeric ceiling** (max_consecutive_auto_reply, max_round) — never rely on the LLM reliably emitting a termination string as the sole stopping mechanism.
+4. **Prefer the smallest agent roster and the most constrained speaker-selection method** that accomplishes the task — default away from large, auto-selected GroupChats until a smaller design is proven insufficient.
+5. **Log full conversation transcripts and per-conversation cost**, since debugging a multi-turn, multi-agent failure without the transcript means guessing rather than diagnosing (see Debugging and Monitoring).
 `,
 
   "industry-examples": `
-- **Automated coding-assistant research and tooling**, directly leveraging AutoGen's assistant/user-proxy code-generation-execution pattern.
-- **Microsoft's own broader AI tooling ecosystem**, with AutoGen positioned as a research-driven, conversation-centric complement to more product-oriented frameworks.
-- **Multi-agent research prototyping**, where AutoGen's flexible GroupChat model is used to explore emergent multi-agent collaboration patterns.
+- **Software engineering / coding-assistant tooling** is AutoGen's most natural and heavily documented fit: a coder agent and a code-executing user-proxy agent iterating on a task until tests pass, closely mirroring the original AutoGen paper's own motivating examples and reflected widely in community tutorials and internal developer-productivity tools built on the framework.
+- **Data analysis and notebook-style automation**, where an assistant agent writes and iteratively fixes data-processing or plotting code against a user proxy that executes it and reports back errors or output, letting a data-analysis workflow self-correct without a human manually running each cell.
+- **Microsoft's own Magentic-One**, a multi-agent system for general web/file/code task completion built on AutoGen's Core runtime, is a direct, named example of AutoGen serving as the underlying substrate for a higher-level, product-facing agent system rather than only being used directly by end-developers.
+- **Research and internal automation teams** exploring debate-style or critic/producer conversational patterns for tasks like report drafting or decision analysis, using AutoGen's conversational primitives specifically because the value sought is genuine multi-perspective back-and-forth rather than a known division of labor.
+- **Internal developer-tooling teams** building "explain this bug, propose a fix, run the tests" assistants on top of AutoGen's code-execution-centric agent pair, valuing the framework's native code-execution loop over hand-rolling one.
+
+Pattern to notice: the common thread across the strongest adopters is a workflow whose natural shape really is iterative and open-ended — write code, run it, see what breaks, fix it, repeat an a priori unknown number of times — rather than a fixed sequence of steps; teams that force a known, fixed pipeline into AutoGen's conversational frame tend to pay for its flexibility (unpredictability, extra LLM calls for turn-taking) without a corresponding benefit (see Anti-Patterns).
 `,
 
   "best-practices": `
-1. **Sandbox all automated code execution**, directly reusing **Guardrails**' action-level constraint guidance.
-2. **Bound conversation length explicitly** (\`max_round\`, \`max_consecutive_auto_reply\`), directly reusing **Agent Fundamentals**' loop-safety guidance.
-3. **Choose \`human_input_mode\` deliberately**, matched to genuine task stakes.
-4. **Design a clear, explicit termination condition/signal** for every conversation pattern.
-5. **Choose the appropriate conversational pattern** (assistant/user-proxy pairing vs. GroupChat) matched to the task's genuine structure.
-6. **Consider custom speaker-selection logic** when a GroupChat's conversation flow needs more deterministic, explicit control.
-7. **Treat all conversational messages between agents as potentially untrusted**, directly reusing the **LangChain** skill's own prompt-injection guidance in a multi-agent context.
+1. **Start with the smallest conversation that could work.** A two-agent (assistant + user proxy) conversation is cheaper, more predictable, and easier to debug than a multi-agent GroupChat; only add participants once you can name a concrete role a third or fourth agent fills that the existing pair genuinely cannot.
+2. **Always pair a termination-phrase check with a numeric ceiling.** Never trust an LLM to reliably emit an exact termination string as the sole stopping mechanism — max_consecutive_auto_reply or max_round is a mandatory circuit breaker, not an optional safety net.
+3. **Sandbox all code execution, always.** Use a Docker-backed executor with an explicit timeout; never run LLM-generated code directly on a host process outside a fully trusted, throwaway local environment.
+4. **Give critic-style agents an external, checkable rubric or test suite**, not just an instruction to "review carefully" — subjective LLM-to-LLM review is the leading cause of agents agreeing with each other without genuinely verifying correctness.
+5. **Prefer round_robin or explicit allowed_or_disallowed_speaker_transitions over unconstrained "auto" speaker selection** once a workflow's rough shape is known — auto selection adds a real per-round LLM call and a real unpredictability cost that's often unjustified.
+6. **Set explicit, per-call LLM timeouts and per-execution sandbox timeouts.** A hung reasoning call or a runaway generated script otherwise stalls or indefinitely runs within a conversation that has no other backstop.
+7. **Log full conversation transcripts and per-conversation cost/turn-count**, not just the final summary — multi-agent, multi-turn debugging without the transcript is guesswork.
+8. **Use a genuinely distinct model, persona, or external verifier for a critic than for the agent it's critiquing.** A same-model, similarly-prompted "critic" rarely catches errors the producer itself wouldn't have caught reasoning alone.
+9. **Treat every conversation as non-transactional.** Several turns — and their cost, and any code they executed — may have already happened before a later turn fails; design retry/resume logic around the partial transcript, not a full restart by default.
+10. **Evaluate at the conversation level against a golden set**, not only by eyeballing a handful of transcripts — non-deterministic multi-turn conversations need the same rigorous evaluation discipline as any other LLM system (see the AI Evals skill).
+11. **Justify conversation-driven orchestration in writing before choosing it.** If the workflow's division of labor and step count are actually known in advance, a CrewAI-style task pipeline or a LangGraph graph will very likely be cheaper and more predictable — write down why the task's open-endedness specifically needs a conversational model.
+12. **Keep an eye on the layered-architecture question.** If you find yourself fighting AgentChat's conversational assumptions to express a non-chat agent topology or custom routing, consider whether the Core layer (or a different framework entirely) is a better fit rather than forcing the conversational abstraction.
 `,
 
   "anti-patterns": `
-### Unsandboxed automatic code execution
+### Unbounded GroupChat with only a termination phrase and no ceiling
 
-~~~
-# WRONG — running a UserProxyAgent's code_execution_config
-# without sandboxing (use_docker=False) in a production
-# context processing untrusted or model-generated code
-# RIGHT — sandbox all automated code execution, directly
-# reusing Guardrails' action-level constraint guidance
-~~~
+~~~python
+# WRONG: no max_round, no max_consecutive_auto_reply, relying purely
+# on the LLM reliably emitting "TERMINATE" — a paraphrase, an omission,
+# or a premature emission all produce either a runaway conversation
+# or a silently truncated one.
+groupchat = GroupChat(
+    agents=[user_proxy, coder, critic, planner, reviewer],
+    messages=[],
+    speaker_selection_method="auto",
+    # max_round missing!
+)
 
-### Unbounded conversation length
-
-~~~
-# WRONG — a GroupChat or assistant/user-proxy conversation
-# with no max_round or max_consecutive_auto_reply bound,
-# risking an unproductive, expensive, indefinite conversation
-# RIGHT — always bound conversation length explicitly,
-# directly reusing Agent Fundamentals' loop-safety guidance
-~~~
-
-### Fully autonomous code execution for high-stakes tasks
-
-~~~
-# WRONG — using human_input_mode="NEVER" for a genuinely
-# high-stakes code-execution context without any human
-# review checkpoint
-# RIGHT — choose human_input_mode deliberately (e.g.,
-# "ALWAYS" or "TERMINATE") matched to the task's actual stakes
+# RIGHT: always pair a phrase check with a hard numeric ceiling, and
+# keep the roster as small as the task actually requires.
+groupchat = GroupChat(
+    agents=[user_proxy, coder, critic],
+    messages=[],
+    max_round=12,
+    speaker_selection_method="round_robin",
+)
 ~~~
 
 ### Other production-grade anti-patterns
 
-- **Using GroupChat for a task that's genuinely a simple, two-participant conversation**, adding unnecessary coordination overhead.
-- **Not designing a clear termination signal**, risking an indefinite or awkwardly-ending conversation.
-- **Treating inter-agent conversational messages as inherently trusted**, missing potential prompt-injection risk in a multi-agent context.
+- **Using a GroupChat where a fixed two-step pipeline would do.** If the roster and speaking order are actually known and fixed in advance, modeling it as a conversation with auto speaker selection adds cost (a selection LLM call per round) and unpredictability with no corresponding benefit over a plain sequential pipeline or a two-agent conversation.
+- **A critic agent instructed only to "review carefully" with no external rubric.** Subjective LLM-to-LLM review reliably produces quick, confident agreement regardless of correctness; wire in an actual test suite, schema check, or explicit checklist the critic must run against.
+- **Running LLM-generated code unsandboxed** "just for a quick local test" — this habit reliably migrates into less-careful environments over time and is a genuine security risk, not merely bad hygiene (see Security).
+- **Treating a conversation's summary as ground truth without checking the full transcript** during debugging — the LLM-generated summary can itself omit or misrepresent what actually happened in the conversation, especially around errors that were eventually resolved.
+- **Letting a GroupChat's roster grow agent-by-agent over time** without review, the conversational-framework equivalent of CrewAI's "crew creep" — each additional participant adds cost and unpredictability that should be a deliberate tradeoff, not silent drift.
+- **Treating a multi-turn conversation as deterministic enough for exact-match testing.** Non-deterministic, multi-agent conversational output varies run to run; test structural and outcome properties (did the tests actually pass, was a specific bug actually fixed), not exact transcript text.
+- **No timeout on either the LLM calls or the code executor.** A hung API call or an infinite-looping generated script otherwise blocks the whole conversation with no automatic recovery.
 `,
 
   performance: `
-### Rule zero: choose the simplest conversational pattern genuinely sufficient for the task
+### Measure first
 
-A simple assistant/user-proxy pairing is faster and more predictable than a full GroupChat — reserve GroupChat specifically for tasks genuinely requiring coordination among more than two distinct participants.
+~~~python
+result = user_proxy.initiate_chat(assistant, message="...")
 
-### The performance hierarchy (apply in order)
+print(result.cost)              # per-model token/cost breakdown
+print(len(result.chat_history))  # actual turn count for this run
+~~~
 
-1. **Choose the appropriate conversational pattern** (pairing vs. GroupChat) matched to genuine collaboration needs.
-2. **Bound conversation length explicitly**, avoiding wasted compute/cost from unproductive, lengthy conversations.
-3. **Design efficient speaker-selection logic** for GroupChat, avoiding unnecessary additional LLM calls purely for turn-taking decisions where a simpler, deterministic rule would suffice.
-4. **Sandbox code execution efficiently**, balancing genuine safety needs against the overhead sandboxing introduces.
+Inspect the actual turn count and cost breakdown per conversation, not just an assumed steady-state estimate — in practice, a small fraction of conversations (those that hit a bug the assistant struggles to fix, or a critic that keeps finding nitpicks) account for a disproportionate share of total cost, and averages hide that tail.
 
-### Micro-level facts worth knowing
+### The optimization hierarchy (apply in order)
 
-- GroupChat's default speaker-selection mechanism itself involves an LLM call at each turn (deciding who speaks next), directly connecting to the **Inference** skill's own per-call cost treatment — a custom, deterministic speaker-selection function can reduce this overhead when the conversation's turn-taking pattern is genuinely predictable.
-- Code execution sandboxing (e.g., Docker) introduces genuine latency overhead compared to unsandboxed execution — a deliberate tradeoff against the safety benefit it provides.
+1. **Reduce the agent roster and round ceiling to the minimum that genuinely needs conversational back-and-forth.** Every additional agent or round is a full additional LLM round trip (or two, counting speaker selection in a GroupChat); this is the single biggest lever, larger than any per-call optimization.
+2. **Prefer round_robin or explicit speaker-transition constraints over "auto" selection** once the workflow's rough shape is known — auto selection's own LLM call, per round, is pure overhead once you no longer need dynamic speaker choice.
+3. **Use a smaller/faster model for simpler roles** (a code-executing user proxy's own reasoning needs, if any, are usually lighter than an assistant actually generating and revising code) and reserve the most capable model for the role that most needs it.
+4. **Cache or reuse sandbox containers across runs** where safe to do so, since Docker container startup can dominate latency for short code-execution turns if a fresh container is spun up every single time.
+5. **Bound iteration explicitly** (max_consecutive_auto_reply, max_round) so a confused conversation's cost has a hard ceiling rather than an open-ended one, treating this as a performance lever as much as a safety one.
+6. **Trim system messages and avoid re-stating large, static context on every turn** where the underlying model/provider supports prompt caching, since a growing conversation history means every subsequent LLM call re-processes an ever-larger prompt.
+7. **Run independent conversations concurrently** (separate initiate_chat calls for genuinely unrelated sub-tasks) rather than serializing work that doesn't actually depend on shared conversational state.
+
+### Numbers worth internalizing
+
+A GroupChat's end-to-end cost is roughly (number of rounds) times (one reply call, plus one additional selection call per round under "auto" selection), so a modest twelve-round, three-agent auto-selected GroupChat can easily mean twenty-plus LLM calls for a single task — several times what a well-scoped two-agent conversation, or a single well-tooled agent, would cost for the same outcome. That multiplier is the concrete number to weigh against conversational flexibility before choosing a large, auto-selected roster (see Comparisons).
 `,
 
   scalability: `
-AutoGen's conversational architecture directly determines how confidently an organization can scale into additional collaborating agents within a genuinely multi-participant dialogue.
-
-### How disciplined conversational design enables scaling
+AutoGen itself is a coordination layer over LLM providers, code-execution sandboxes, and (optionally) human input; scalability is mostly a property of those dependencies and how conversations are scheduled as a workload.
 
 ~~~mermaid
 flowchart LR
-    BoundedConversation["Bounded conversation length +\nclear termination + sandboxed\nexecution"] --> Reliable["Reliable, safe multi-agent\ncollaboration"]
-    Reliable --> ConfidentScaling["Confident scaling to\nadditional collaborating\nagents in GroupChat"]
+    LB["Load balancer"] --> API1["Conversation-serving API replica 1"]
+    LB --> API2["Conversation-serving API replica N"]
+    API1 & API2 --> LLMProv["LLM provider(s)\n(rate limits apply per key/account)"]
+    API1 & API2 --> Sandbox["Code-execution sandbox pool\n(Docker containers, per-conversation or pooled)"]
+    Queue["Job queue"] --> Workers["Async conversation workers"]
+    Workers --> LLMProv
+    Workers --> Sandbox
 ~~~
 
-### Known ceilings and answers
+### Scaling the request path
+
+- **Horizontal**: conversation-serving API replicas are stateless per request (given shared LLM credentials and a shared or per-replica sandbox pool), so scale them like any stateless service behind a load balancer — the same pattern used for single-agent or CrewAI services.
+- **The real bottleneck is almost always LLM API rate limits, per-call latency, and sandbox container startup/teardown time**, multiplied by however many rounds and speaker-selection calls a given conversation involves — a twelve-round GroupChat consumes several times the rate-limit and compute budget of a single-agent call for the same request.
+- **Long-running, open-ended conversations (especially large GroupChats with auto selection or human-in-the-loop pauses) are a poor fit for a synchronous request/response API** — move them to an async job queue with a polling or webhook-based result delivery, the same pattern used for any long-running agentic workload.
+- **Sandbox container lifecycle matters at scale**: spinning up a fresh Docker container per code-execution turn is safe but can add meaningful latency under load; a pooled, pre-warmed sandbox pool (with careful isolation between conversations) trades some operational complexity for materially lower per-turn latency.
+
+### Bottleneck table
 
 | Bottleneck | Answer |
 |------------|--------|
-| A workflow requiring precise, deterministic conditional branching beyond conversational flexibility | Consider LangGraph, or custom speaker-selection logic to add more determinism |
-| Unbounded conversation length running indefinitely | Set max_round and max_consecutive_auto_reply explicitly |
-| Unsafe, unsandboxed code execution risk | Enable Docker-based sandboxing for all automated code execution |
-| GroupChat coordination overhead for a simple two-participant task | Use a simple assistant/user-proxy pairing instead |
+| LLM rate limits under conversation fan-out | Route different agents to different models/providers/keys where feasible; queue and backoff rather than fail |
+| Long GroupChat latency | Prefer round_robin/constrained transitions over auto selection; move long conversations to async job execution |
+| Sandbox container startup dominating turn latency | Use a pooled, pre-warmed executor pool with strict per-conversation isolation |
+| Cost scaling with roster size and round ceiling | Audit roster size and max_round regularly; merge or remove agents whose role doesn't earn its keep |
+| Unbounded conversations consuming capacity | Enforce max_consecutive_auto_reply/max_round and pair with a robust termination-phrase check |
 `,
 
   security: `
-### AutoGen-specific security considerations, directly extending Agent Fundamentals and Guardrails
+### AutoGen-specific attack surface
 
-~~~
-AutoGen's particular emphasis on AUTOMATED CODE EXECUTION
-(via the user-proxy agent) represents a genuinely significant,
-distinct risk surface compared to frameworks emphasizing more
-general tool-use -- executing MODEL-GENERATED code
-automatically requires the same rigorous action-level
-guardrail thinking covered in Agent Fundamentals and
-Guardrails, applied specifically and rigorously to this
-particular capability.
-~~~
+1. **Unsandboxed code execution.** AutoGen's core value proposition includes letting an LLM-proposed code snippet actually run; if that execution happens directly on a host process rather than in an isolated container, a buggy or maliciously-influenced generation (via prompt injection in retrieved content, or simply an unlucky generation) can access the filesystem, network, or credentials the host process can reach. Always use a Docker-backed (or equivalent fully isolated) executor with a timeout, never bare local execution outside a fully trusted, throwaway environment.
+2. **Prompt injection via tool/execution results flowing back into the conversation.** If a code execution's output (or a tool an agent calls) includes content from an untrusted external source — scraped web content, a file with attacker-controlled contents — and that output becomes the next message in the shared history, an injected instruction can attempt to steer subsequent agent behavior. Treat all execution and tool output as untrusted input at every hop, not only at the point of first retrieval — see the **Tool Calling** and dedicated **Prompt Injection** skills.
+3. **Human-in-the-loop bypass or fatigue.** A human_input_mode configured to ask for approval "only sometimes" (e.g., TERMINATE-only) can lull an operator into rubber-stamping without real review once a system has run smoothly for a while, particularly dangerous if code execution or external actions are gated behind that same approval step; treat human-in-the-loop as a meaningful control point deserving real review discipline, not a checkbox.
+4. **Unbounded cost from unauthenticated or unrated conversation-triggering endpoints.** A public endpoint that kicks off a multi-agent, multi-round GroupChat per request is a much larger cost-abuse surface than a single-agent endpoint, since each malicious request can multiply into dozens of LLM calls; apply authentication/rate-limiting discipline scaled to the conversation's actual round/roster multiplier.
+5. **Sensitive data exposure across the shared conversation history.** Because every participating agent by default sees the full shared message history, sensitive data surfaced by one agent's tool or code execution is visible to every other agent in the conversation, including any that might eventually produce a public-facing output — apply the same data-minimization discipline you would to any multi-service data flow.
 
-### Essential AutoGen-related security practices
+### Defenses
 
-1. **Always sandbox automated code execution** (e.g., via Docker), never executing model-generated code directly against the host environment in production.
-2. **Choose \`human_input_mode\` deliberately for high-stakes execution contexts**, directly reusing **Agent Fundamentals**' autonomy-calibration guidance.
-3. **Treat inter-agent conversational messages as potentially untrusted**, directly reusing the **LangChain** skill's own prompt-injection guidance in a multi-agent context.
-4. **Limit the sandboxed execution environment's own permissions/network access** to the minimum genuinely necessary.
+- Always execute LLM-generated code in a fully isolated, resource-limited sandbox (Docker, ideally with restricted network access and a mounted, scoped-down filesystem) with an explicit timeout.
+- Sanitize and flag execution/tool output that reaches the shared conversation history, and reinforce system-level instructions against override attempts at every participating agent, not only the first.
+- Treat human_input_mode settings as a security control with real review discipline, not a rate-limiting convenience — audit what actions are actually gated behind human approval and whether that approval is genuinely being exercised.
+- Rate-limit and authenticate any endpoint that triggers a conversation, sized to the conversation's actual round/roster multiplier, not to a single-agent baseline.
+- Minimize what's visible across the shared history where feasible (e.g., via nested chats that scope a sensitive sub-task to a narrower set of participants) rather than defaulting every agent into seeing everything.
 
-See **Agent Fundamentals** and **Guardrails** for the broader security context this connects to.
+See the dedicated **Prompt Injection**, **OWASP Top 10 for LLM Applications**, and **Tool Calling** skills for depth beyond what's AutoGen-specific here.
 `,
 
   testing: `
-### Testing the code-generation-execution loop
+### Testing individual agent behavior in isolation
 
 ~~~python
-def test_assistant_generates_working_code_for_simple_task():
-    user_proxy.initiate_chat(assistant, message="Write a function that adds two numbers.")
-    last_message = user_proxy.last_message()
-    assert "def" in last_message["content"]
+def test_assistant_proposes_valid_python():
+    from autogen import AssistantAgent
+
+    assistant = AssistantAgent(
+        name="assistant",
+        system_message="You write Python code to solve tasks.",
+        llm_config={"config_list": [{"model": "gpt-4o-mini"}]},
+    )
+    reply = assistant.generate_reply(
+        messages=[{"role": "user", "content": "Write a function that adds two numbers."}]
+    )
+    # Don't assert on exact text; assert on structural properties.
+    assert "def " in reply["content"]
 ~~~
 
-### Testing bounded conversation termination
+### Testing termination logic deterministically, without a real LLM call
 
 ~~~python
-def test_groupchat_terminates_within_max_round():
-    manager_chat = groupchat_manager.run_chat(...)
-    assert len(groupchat.messages) <= groupchat.max_round
+def test_is_termination_msg_matches_phrase():
+    def is_termination_msg(msg):
+        return "TERMINATE" in (msg.get("content") or "")
+
+    assert is_termination_msg({"content": "All tests pass. TERMINATE"})
+    assert not is_termination_msg({"content": "Still working on it."})
 ~~~
 
-### The senior testing doctrine
+### The senior testing doctrine for multi-agent conversations
 
-- Test that a code-generation task produces genuinely working, executable code across representative prompts, directly connecting to the **Evaluation** skill's own rigorous measurement methodology.
-- Test that conversations correctly terminate within their bounded round/reply limits.
-- Test that \`human_input_mode\` configuration correctly requires (or doesn't require) human input at the expected points.
-- Test code-execution sandboxing explicitly, verifying execution genuinely occurs within the isolated environment, not against the host directly.
+- **Unit test deterministic wiring**: termination-phrase logic, speaker-transition constraints, custom register_reply functions, code-executor configuration — none of this requires a real LLM call and all of it is where real bugs (a termination phrase that never matches, a missing numeric ceiling) actually live.
+- **Integration test against a small golden set at the full-conversation level**, not just individual agent replies — a conversation can look fine turn by turn while never actually converging on a correct final answer (see the AI Evals skill for the general discipline).
+- **Never assert on exact conversation transcript text.** Assert on outcome properties: did the generated code's tests actually pass, did the conversation terminate within an expected round range, does the final summary contain required elements — or use LLM-as-judge scoring against a documented rubric.
+- **Test failure and partial-completion behavior explicitly.** Since a conversation is not transactional, verify your system's behavior when a conversation is cut off mid-way (hits max_round without terminating cleanly) — does the caller get a clear signal, and is the partial transcript still logged and usable?
+- **Regression-test round count and cost, not only outcome quality.** A conversation that silently grew from four rounds to fifteen over time (through gradual roster or rubric creep) is a real, observed production drift worth catching in CI, exactly as with CrewAI's task-count creep.
+- **Specifically test the "agents agree too easily" failure mode** by feeding a critic agent a known-flawed solution in an isolated test and asserting it actually flags the flaw, rather than only testing the happy path where the first proposed solution happens to be correct.
 `,
 
   debugging: `
 ### The toolbox, in escalation order
 
-1. **Inspect the full conversation transcript first** (every message exchanged between agents), directly analogous to **Agent Fundamentals**' own trajectory-tracing debugging guidance.
-2. **Check code-execution results specifically** if a coding task produced an unexpected outcome.
-3. **Check speaker-selection logic** in a GroupChat if the wrong agent spoke at an unexpected point.
-4. **Check conversation-termination configuration** if a conversation runs longer than expected or doesn't conclude as intended.
+1. **Always inspect the full chat_history first**, not just the final summary — with multiple turns and agents in play, the bug is very often several turns earlier (a misunderstood task, a code-execution error the assistant never actually fixed) rather than in the final message alone.
 
-### Debugging common AutoGen-related symptoms
+~~~python
+result = user_proxy.initiate_chat(assistant, message="...")
+for msg in result.chat_history:
+    print(msg.get("name", msg.get("role")), "->", (msg.get("content") or "")[:200])
+~~~
 
-- "The generated code doesn't work as expected" — inspect the full conversation transcript, checking the exact execution results fed back to the assistant.
-- "The wrong agent spoke at an unexpected point in a GroupChat" — inspect the speaker-selection logic (default LLM-driven or custom function).
-- "The conversation ran much longer than expected" — check max_round/max_consecutive_auto_reply configuration and the termination-signal logic.
-- "Code execution behaved unexpectedly or unsafely" — verify sandboxing (Docker) is correctly configured and enabled.
+2. **Check termination logic explicitly when a conversation runs longer (or shorter) than expected** — print is_termination_msg's result against each message in the transcript to see exactly where, or why, it did or didn't fire.
+3. **Reproduce with the smallest possible conversation** (two agents, a tight round ceiling) when diagnosing whether a problem is in a specific agent's reasoning versus in how the conversation is composed with others.
+4. **Inspect the code executor's raw output directly**, not just the assistant's summary of it — an assistant can misreport or misinterpret an execution error, and the raw stdout/stderr/traceback is ground truth.
+5. **In a GroupChat, check speaker-selection decisions explicitly** when the wrong agent seems to be speaking at the wrong time — under "auto" selection, log the manager's selection reasoning (or switch temporarily to round_robin) to isolate whether the bug is in speaker choice or in a specific agent's reply content.
+6. **Diagnose "agents agreeing too quickly" by checking whether the critic's feedback ever references anything specific**, or whether the conversation terminated in far fewer rounds than the task's apparent difficulty would suggest — both are strong signals the critique is not substantive.
+
+### Debugging unbounded/looping conversations
+
+Print the round count against the configured max_round/max_consecutive_auto_reply ceiling explicitly, and diff the last few messages against each other — a genuinely looping conversation typically shows near-repeated content (the same fix proposed, the same critique repeated) rather than incremental progress, which is the clearest signal to add a stricter termination check or a lower round ceiling rather than assuming the model "just needs more turns."
 `,
 
   monitoring: `
-### Key signals to track
+Production visibility for an AutoGen system rests on both general service observability (see the Observability category) and conversation-specific signals a single-agent system doesn't need.
 
-- **Full conversation transcripts** (every message exchanged), directly connecting to **Agent Fundamentals**' own trajectory-observability treatment.
-- **Conversation length distribution**, watching for conversations frequently approaching bounded round limits.
-- **Code-execution success/failure rates**, a signal of the assistant's genuine code-generation quality.
-- **Human-input request frequency**, for configurations using \`"TERMINATE"\` or similar conditional human-input modes.
+### Structured logging per conversation
 
-### Tools
+~~~python
+import structlog
 
-AutoGen's own logging capabilities for conversation-transcript capture; general LLM observability tools (e.g., **Langfuse**, covered in its own skill) for broader production monitoring across a multi-agent AutoGen system.
+log = structlog.get_logger()
 
-### Alerting priorities
+def logged_chat(user_proxy, recipient, message: str, request_id: str):
+    result = user_proxy.initiate_chat(recipient, message=message)
+    log.info(
+        "autogen_conversation",
+        request_id=request_id,
+        num_turns=len(result.chat_history),
+        cost=result.cost,
+        terminated_cleanly=any(
+            "TERMINATE" in (m.get("content") or "") for m in result.chat_history
+        ),
+    )
+    return result
+~~~
 
-Alert on a significant increase in conversations reaching bounded round limits without resolution, and on code-execution failure rates exceeding an established baseline.
+### Conversation-specific metrics to track
+
+- **Turn count per conversation**, not just cost — a rising average or a fat right tail signals termination logic isn't firing reliably, or task difficulty has shifted, before cost alone would make it obvious.
+- **Clean-termination rate** (did is_termination_msg actually fire before hitting a numeric ceiling) as an explicit metric — a low rate is an early warning that your termination-phrase logic is fragile.
+- **Speaker-selection distribution in GroupChats** (how often each agent actually speaks) — a roster member that almost never gets selected is a candidate for removal; one that dominates every round may indicate a mis-tuned selection prompt or constraint.
+- **Critic/reviewer "agreement speed"**: rounds-to-termination in critic-style conversations, watched for anomalously fast agreement that correlates with lower downstream quality (a strong signal of the "agreeing too easily" failure mode).
+- **Cost per conversation, broken down by turn**, not only the aggregate — the fastest way to spot the one expensive round (usually a large code-execution retry loop or an unnecessary auto speaker-selection call) in an otherwise cheap workflow.
+
+### Tracing
+
+Trace each turn as its own span, nested under a parent span for the whole initiate_chat call, and nest code-execution spans under the turn that triggered them — this mirrors the internal-working sequence diagram and is the fastest way to answer "why was this specific conversation slow, expensive, or wrong" without re-reading a full transcript line by line.
 `,
 
   deployment: `
-### A representative production deployment configuration
+### A production Dockerfile for an AutoGen-based service
 
-~~~python
-user_proxy = UserProxyAgent(
-    name="user_proxy",
-    human_input_mode="TERMINATE",
-    code_execution_config={"work_dir": "coding", "use_docker": True},
-    max_consecutive_auto_reply=10,
-)
+~~~dockerfile
+# ---- build stage ----
+FROM python:3.12-slim AS builder
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-dev
+COPY src/ src/
+RUN uv sync --frozen --no-dev
+
+# ---- runtime stage ----
+FROM python:3.12-slim
+RUN useradd -m appuser
+WORKDIR /app
+COPY --from=builder /app/.venv /app/.venv
+COPY src/ src/
+ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
+USER appuser
+EXPOSE 8000
+CMD ["uvicorn", "codeassist.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ~~~
 
-### CI/CD pipeline considerations
+Why each choice matters: slim base and a non-root user reduce attack surface; the dependency layer is cached separately from application code for fast rebuilds; PYTHONUNBUFFERED ensures conversation transcripts (which matter a lot for debugging multi-agent runs) stream immediately rather than buffering. Note that this Dockerfile serves the orchestration API only — the code-execution sandbox itself should run as a separate, more tightly isolated container (or a dedicated container-per-conversation pool), never inside this same application process.
 
-Treat agent system messages, GroupChat configuration, and speaker-selection logic as genuine, version-controlled application configuration, with automated evaluation (directly connecting to the **Evaluation** skill) against representative coding/collaboration tasks as a deployment gate. See the **CI/CD** skill and the platform's later **LLMOps** skill for the general deployment depth this connects to.
+### Serving topology
+
+- **Short, two-agent conversations with a tight round ceiling**: can be served synchronously behind a normal API, with a request timeout sized generously above the conversation's measured p95 latency.
+- **Longer or GroupChat conversations, or any with human_input_mode requiring real human input**: move to an async job queue with a polling or webhook-based result delivery — treating a multi-minute, multi-turn, possibly human-paused conversation as a synchronous HTTP request invites timeouts and wasted client-side retries that re-trigger a costly conversation from scratch.
+- **Sandbox isolation**: run code execution in a separate container or container pool from the orchestration API process, with restricted network access and a scoped-down, ephemeral filesystem per conversation.
+- **Health checks**: a /healthz for process liveness, and a /readyz that verifies the LLM provider(s) and the code-execution sandbox pool are reachable before accepting traffic.
+- **Cost and quota guarding**: since a conversation multiplies LLM calls across turns and (in GroupChats) speaker-selection calls, apply per-tenant or per-endpoint request quotas sized to that multiplier, not to a single-agent baseline.
+
+### CI/CD pipeline sketch
+
+lint/typecheck → unit tests (termination logic, speaker-transition constraints, executor configuration) → golden-set regression test at the full-conversation level → build image(s) for both the API and the sandbox → deploy with rolling update → separately validate any GroupChat or human-in-the-loop path against a canary workload before flipping full production traffic.
 `,
 
   "production-checklist": `
-Before a production AutoGen application takes real traffic:
+Before an AutoGen-based system takes real traffic:
 
-- [ ] All automated code execution sandboxed (Docker or equivalent), never executed directly against the host
-- [ ] human_input_mode chosen deliberately, matched to genuine task stakes
-- [ ] Conversation length explicitly bounded (max_round, max_consecutive_auto_reply)
-- [ ] Clear, explicit termination condition/signal designed for every conversation pattern
-- [ ] Appropriate conversational pattern chosen (pairing vs. GroupChat) for the task's genuine structure
-- [ ] Full conversation transcripts logged for observability
-- [ ] Inter-agent messages treated as potentially untrusted for prompt-injection risk
+- [ ] Every conversation has both a termination-phrase check and a hard numeric ceiling (max_consecutive_auto_reply/max_round)
+- [ ] All code execution runs in a fully isolated, timeout-bounded sandbox (Docker or equivalent), never unsandboxed
+- [ ] Critic/reviewer agents are given an external, checkable rubric or test suite, not only an instruction to "review carefully"
+- [ ] Speaker-selection method is round_robin or explicitly constrained where the workflow's shape is known, with "auto" reserved for cases that genuinely need it
+- [ ] Explicit LLM call timeouts and sandbox execution timeouts are set
+- [ ] Full conversation transcripts and per-conversation cost/turn-count are logged
+- [ ] Agent roster size is reviewed and justified, not grown ad hoc over time
+- [ ] Failure/partial-completion behavior is explicitly handled (conversations are not transactional)
+- [ ] Long-running, GroupChat, or human-in-the-loop conversations are served asynchronously, not as a synchronous HTTP request
+- [ ] Rate limiting and authentication on any endpoint that triggers a conversation, sized to its LLM-call multiplier
+- [ ] A golden-set regression test exists at the full-conversation level, checking outcome properties, not exact transcript text
+- [ ] Clean-termination rate and speaker-selection distribution are tracked as explicit metrics
+- [ ] Sensitive data exposure across the shared conversation history has been reviewed for every agent that can see it
+- [ ] Someone has explicitly justified, in writing, why this problem needed conversation-driven orchestration rather than a fixed pipeline or single agent
+
+Cross-check with the AI Evals skill for the deeper evaluation discipline behind the golden-set checklist item.
 `,
 
   "common-mistakes": `
-1. **Unsandboxed automatic code execution**, risking genuine harm from executing untrusted, model-generated code directly.
-2. **Unbounded conversation length**, risking unproductive, expensive, indefinite conversations.
-3. **Using human_input_mode="NEVER" for genuinely high-stakes code-execution contexts.**
-4. **Using GroupChat for a task that's genuinely a simple two-participant conversation.**
-5. **Not designing a clear termination signal**, risking an indefinite or awkwardly-ending conversation.
-6. **Treating inter-agent conversational messages as inherently trusted.**
+1. **Relying on a termination phrase alone, with no numeric ceiling.** An LLM can fail to emit, paraphrase, or prematurely emit a termination string; without a hard max_round/max_consecutive_auto_reply backstop, this is a direct path to an unbounded, cost-runaway conversation.
+2. **Running LLM-generated code unsandboxed "just for local testing."** This habit reliably migrates into less-careful environments over time and is a genuine security exposure, not merely sloppy hygiene.
+3. **Assuming two conversing agents will meaningfully critique each other by default.** Without an external rubric, test suite, or a genuinely adversarial persona, LLM-to-LLM review frequently converges on quick, confident agreement regardless of actual correctness.
+4. **Reaching for GroupChat with "auto" speaker selection before trying a fixed two-agent conversation.** This adds real per-round cost and unpredictability that's often unjustified for tasks whose roster and rough order are actually known in advance.
+5. **Letting a GroupChat's roster grow agent-by-agent over time** without review — the same "crew creep" pattern seen in CrewAI, where each added participant increases cost and unpredictability without a corresponding, measured quality gain.
+6. **Treating a conversation's auto-generated summary as ground truth** during debugging, when the full transcript (especially raw code-execution output) may tell a materially different story.
+7. **No timeout on LLM calls or the code executor.** A hung API call or an infinite-looping generated script otherwise blocks the whole conversation indefinitely with no automatic recovery.
+8. **Testing conversational output with exact-string assertions.** Multi-turn, multi-agent LLM output is non-deterministic; tests should check outcome properties (tests passed, termination occurred within range) and golden-set quality scores, not exact transcript text.
+9. **Treating a conversation as transactional.** Assuming a failed or truncated conversation can simply be retried from scratch ignores that several turns — and any code they executed, and their cost — may have already happened; production systems need explicit partial-completion handling.
+10. **Not measuring whether conversation-driven orchestration actually improved outcomes over a simpler single-agent or fixed-pipeline baseline.** Shipping a multi-agent conversational design because the pattern is compelling, without a golden-set comparison, means you can't actually justify its added cost, latency, and unpredictability to a reviewer or to yourself.
 `,
 
   "common-errors": `
-| Error | Typical Cause | Fix |
+| Error | Typical cause | Fix |
 |-------|---------------|-----|
-| Generated code doesn't work as expected | Assistant's code-generation quality issue, or execution feedback not clearly communicated | Inspect the full conversation transcript and execution results |
-| Conversation runs far longer than expected | Missing or overly-lenient max_round/max_consecutive_auto_reply bound | Apply Agent Fundamentals' bounded-iteration guidance explicitly |
-| Wrong agent speaks at an unexpected point in GroupChat | Default LLM-driven speaker selection misjudging the conversation | Consider custom, more deterministic speaker-selection logic |
-| Code execution behaves unsafely | Sandboxing (Docker) not enabled or misconfigured | Enable and verify Docker-based sandboxing |
-| Conversation never concludes cleanly | No clear termination signal/condition designed | Define an explicit termination keyword/condition for the assistant |
-| Unexpectedly high cost for a simple two-agent task | Using GroupChat's additional coordination overhead unnecessarily | Use a simple assistant/user-proxy pairing instead |
+| Conversation runs to max_round without resolving | Termination-phrase check never fires (paraphrased or omitted phrase) | Tighten is_termination_msg (case-insensitive, substring-tolerant matching) and keep the numeric ceiling as a backstop, not the primary mechanism |
+| Conversation ends far too quickly with a shallow result | Critic agent agreeing without substantive review | Give the critic an external rubric or test suite; use a distinct model/persona for the critic |
+| Code execution silently fails or produces unexpected output | No sandbox timeout, or executor misconfigured (missing dependencies in the image) | Set an explicit execution timeout; verify the executor's base image includes everything the generated code needs |
+| Wrong agent speaks at the wrong time in a GroupChat | Unconstrained "auto" speaker selection choosing based on ambiguous conversational cues | Constrain with allowed_or_disallowed_speaker_transitions or switch to round_robin |
+| Cost spikes on a subset of requests | A small fraction of conversations hit a long retry/critique loop | Log per-conversation cost and round count; investigate and cap the specific pattern causing the tail |
+| Security incident from generated code | Code executed unsandboxed, outside a Docker/isolated executor | Always use a fully isolated, resource-limited, timeout-bounded executor; never run unsandboxed |
+| Sensitive data appears in an unexpected agent's output | All agents share the full conversation history by default | Use nested chats or a narrower roster to scope sensitive sub-tasks away from agents that don't need that data |
+| Partial conversation on failure leaves inconsistent downstream state | Conversation treated as transactional by the caller | Handle partial completion explicitly; log the transcript even on overall failure |
+
+The habit that matters: reproduce with the smallest conversation (fewest agents/rounds that still shows the bug), inspect the full transcript and raw code-execution output first, and only then consider whether the underlying LLM or a specific tool/executor is actually at fault.
 `,
 
   faqs: `
-**What is AutoGen?**
-Microsoft's open-source, conversation-centric multi-agent framework, modeling agent collaboration as structured message-passing conversations rather than an explicit graph or role hierarchy.
+**Q: Is AutoGen just "agents that chat with each other," or is there more to it?**
+The conversational model is the core idea, but the framework adds real infrastructure around it: pluggable reply generation (LLM, code execution, human input, custom functions), configurable termination, GroupChat speaker-selection strategies, and (in the 0.4 rearchitecture) a lower-level event-driven Core runtime beneath the higher-level AgentChat conversational API.
 
-**What is a ConversableAgent?**
-AutoGen's fundamental building block — an agent capable of generating and receiving messages, optionally invoking tools including code execution.
+**Q: When should I use AutoGen instead of CrewAI?**
+When the workflow's value genuinely comes from open-ended, iterative back-and-forth with an unknown number of rounds — a coder and a critic iterating until tests pass, a debate-style multi-perspective analysis — rather than a known division of labor executed in a fixed or plannable order, which CrewAI's task/process model handles more predictably and cheaply.
 
-**What is the assistant/user-proxy pattern?**
-A particularly influential AutoGen pattern pairing an AssistantAgent (proposing responses/code) with a UserProxyAgent (executing code/providing feedback, or representing a human), directly implementing a plan-act-observe loop as an explicit two-participant conversation.
+**Q: When should I use AutoGen instead of LangGraph?**
+When you want the conversational, message-history-centric model and its native code-execution loop, and you're comfortable trading some precise control for that flexibility. If your workflow needs exact conditional branching over explicit state, LangGraph's hand-wired graph gives you that control more directly than AutoGen's conversational abstraction.
 
-**What is GroupChat?**
-An AutoGen abstraction coordinating conversation among more than two agents, with a GroupChatManager determining which agent speaks next at each turn.
+**Q: Do I need Docker to use AutoGen's code execution?**
+Not strictly, but you should treat sandboxed (Docker-backed) execution as the responsible default for anything beyond a fully trusted, throwaway local experiment — running LLM-generated code directly on a host process is a real security risk, not a theoretical one.
 
-**How does human_input_mode connect to Agent Fundamentals?**
-It directly, concretely implements the autonomy-level spectrum — "NEVER" (fully autonomous), "ALWAYS" (fully human-supervised), and "TERMINATE" (a middle-ground, conditional autonomy tier).
+**Q: How do I stop a conversation from looping forever?**
+Always pair a termination-phrase check (is_termination_msg) with a hard numeric ceiling (max_consecutive_auto_reply on an agent, max_round on a GroupChat) — never rely on the phrase check alone, since an LLM can fail to emit, paraphrase, or misplace it.
 
-**How does AutoGen compare to LangGraph or CrewAI?**
-AutoGen's conversational model is more flexible but less structurally explicit than LangGraph's graph model, and distinctly conversation-centric (rather than role/task/crew-based) compared to CrewAI, with particular strength in automated code-generation-execution workflows.
+**Q: Why do my two agents seem to agree with each other too quickly?**
+This is a well-documented failure mode: LLM-to-LLM critique without an external rubric or test suite tends toward quick, confident agreement regardless of actual correctness. Give a critic-style agent something objective to check against (tests, a schema, an explicit checklist) rather than relying on its own subjective judgment.
+
+**Q: What is AG2, and is it the same as AutoGen?**
+AG2 is a community-maintained fork that split off from Microsoft's AutoGen after a governance disagreement, continuing development of an architecture closer to the pre-0.4 design under separate stewardship. The two have diverged since; check which one a given tutorial or dependency actually targets before assuming API compatibility.
+
+**Q: How current is this page's API detail?**
+AutoGen's architecture has changed substantially, most notably with the 0.4 Core/AgentChat/Extensions rearchitecture and the AG2 fork. This page reflects general, durable patterns true through the author's knowledge cutoff (early-to-mid 2025) rather than any single pinned version's exact class names — always check current official documentation (and confirm whether you're looking at Microsoft's AutoGen or the AG2 fork) before shipping.
 `,
 
   "interview-questions": `
-### Junior level
+**Junior/Mid:**
 
-1. **What is AutoGen?**
-   Model answer: Microsoft's conversation-centric multi-agent framework, modeling collaboration as message-passing conversations between agents.
+1. *What is a ConversableAgent, and how do AssistantAgent and UserProxyAgent specialize it?* ConversableAgent is the base class for any AutoGen participant that can send/receive messages and generate replies via pluggable logic; AssistantAgent specializes it as an LLM-backed reasoner that proposes solutions (including code) but does not execute anything itself, while UserProxyAgent specializes it as a human/executor stand-in that can run code and relay human input.
+2. *Why does AutoGen split "propose code" and "run code" across two different agents?* To mirror a real code-review-style separation of concerns and to make the code-execution boundary an explicit, gate-able point (via human_input_mode or code_execution_config), rather than letting a single agent silently execute whatever it generates.
+3. *What does human_input_mode control, and what are its typical settings?* How often a UserProxyAgent pauses for real human input — commonly ALWAYS (every turn), TERMINATE (only near the conversation's apparent end), or NEVER (fully automated) — letting the same agent definitions serve both heavily-supervised prototyping and fully automated production use.
+4. *Why is a termination-phrase check alone considered insufficient in production?* An LLM can fail to emit, paraphrase, or prematurely emit the expected phrase; a hard numeric ceiling (max_consecutive_auto_reply/max_round) is needed as a mandatory backstop.
+5. *What does a GroupChatManager actually do?* On each round, it decides which agent in the roster should generate the next reply (via a speaker-selection method — auto/LLM-driven, round_robin, manual, or transition-constrained), acting as the conversation's orchestrator rather than a conversational participant with its own opinion on the task.
 
-2. **What is the assistant/user-proxy pattern?**
-   Model answer: an AssistantAgent proposing responses/code paired with a UserProxyAgent that executes code or represents human feedback.
+**Senior:**
 
-3. **What is GroupChat?**
-   Model answer: an abstraction coordinating conversation among more than two agents, with a manager determining who speaks next.
-
-4. **What does human_input_mode control?**
-   Model answer: the autonomy level of the UserProxyAgent — whether it requires human input never, always, or only when the conversation would otherwise terminate.
-
-### Senior level
-
-5. **Explain precisely why AutoGen's conversational model is particularly well-suited to code-generation-execution workflows, compared to a more general single-agent tool-use loop.**
-   Model answer: a code-generation-execution workflow genuinely involves two DISTINCT concerns that benefit from being modeled as separate participants: the GENERATIVE concern (proposing code based on a task description and, potentially, prior execution feedback) and the EXECUTION concern (actually running that code in a controlled environment and accurately reporting back real results, including errors); in a single-agent tool-use loop (as in LangChain's AgentExecutor or the OpenAI Agents SDK), the SAME agent both decides to invoke a tool AND is the entity whose "turn" produces the final answer, with the tool-execution step being comparatively incidental to the agent's own reasoning process; AutoGen's assistant/user-proxy pattern, by contrast, makes EXECUTION a first-class, distinct conversational participant with its OWN turn in the dialogue — this genuinely mirrors how human software development often works (a developer proposes code, a separate process — compiling, running tests — reports back concrete results, and the developer iterates based on that feedback), and this explicit separation makes it natural to configure the execution participant with its OWN distinct settings (sandboxing, human-approval requirements) independent of the generative assistant's own configuration, a genuinely useful decoupling for exactly this workflow.
-
-6. **A team's AutoGen-based coding assistant occasionally executes code that makes unintended network requests during testing. Diagnose this and propose a fix.**
-   Model answer: this is a direct instance of the CODE-EXECUTION SAFETY risk covered in this page's own security section, directly extending **Agent Fundamentals**' and **Guardrails**' action-level constraint guidance to AutoGen's particular emphasis on automated code execution — if the \`UserProxyAgent\`'s \`code_execution_config\` doesn't have sandboxing (Docker) properly enabled, or the sandboxed environment itself has unrestricted network access, model-generated code (which could, in principle, include code making arbitrary network requests, whether from a hallucinated but plausible-seeming approach or from adversarial manipulation) can execute with more capability than genuinely intended; the fix is twofold: first, verify \`use_docker=True\` is genuinely enabled (not accidentally left as \`False\`, e.g., due to a development-environment default persisting into production); second, and more importantly, configure the DOCKER SANDBOX ITSELF with restricted network access (e.g., no network access by default, or an explicit allowlist of permitted destinations) — directly reusing the principle of least privilege — since sandboxing alone (isolating the execution from the HOST filesystem/processes) doesn't automatically restrict NETWORK access unless the sandbox is specifically configured to do so.
-
-7. **Compare AutoGen's GroupChat against CrewAI's Process.hierarchical for coordinating multiple specialized agents on a shared task, and identify a genuine scenario favoring each.**
-   Model answer: both patterns involve a form of dynamic, LLM-driven coordination among multiple agents rather than a fixed, predetermined sequence, but with meaningfully different framing and defaults: CrewAI's hierarchical process is built around explicit ROLE/GOAL/BACKSTORY-defined agents with a MANAGER agent specifically responsible for TASK DELEGATION (assigning discrete units of work with expected outputs to specific team members), directly reflecting a "management structure" metaphor; AutoGen's GroupChat is built around a more general, flexible CONVERSATION model, where the \`GroupChatManager\`'s job is simply deciding who SPEAKS NEXT in an ongoing dialogue, without necessarily framing this as formal task delegation — the conversation's content and direction emerge more organically from the agents' own message generation; a genuine scenario favoring CrewAI's hierarchical process: a well-defined business process with clearly identifiable discrete deliverables (a research task, then a writing task, then an editing task) benefiting from an explicit manager assigning and tracking these distinct units of work; a genuine scenario favoring AutoGen's GroupChat: a more open-ended, exploratory collaborative problem-solving session (e.g., several specialist agents debating and iterating together on a genuinely difficult technical design decision) where the VALUE lies in flexible, natural back-and-forth dialogue rather than discrete, pre-defined task assignments.
-
-8. **Explain why bounding both max_round (for GroupChat) and max_consecutive_auto_reply (for individual agents) matters, using a concrete failure scenario each guards against.**
-   Model answer: \`max_round\` bounds the TOTAL number of conversational turns across an entire GroupChat, directly guarding against a scenario where the group's overall conversation simply never converges on a satisfactory conclusion — for example, if a reviewer agent and a coder agent repeatedly disagree about whether a proposed solution is acceptable, without \`max_round\`, this back-and-forth could continue indefinitely, consuming unbounded compute/cost without ever reaching a final answer; \`max_consecutive_auto_reply\` bounds how many times a SPECIFIC INDIVIDUAL agent can automatically reply in succession without external intervention, guarding against a genuinely different failure scenario — for example, an assistant agent stuck in a self-correction loop repeatedly attempting (and failing) to fix a specific bug in generated code across many consecutive replies to itself/the user-proxy, without ever escalating or concluding; both bounds directly reuse **Agent Fundamentals**' foundational loop-safety guidance, but applied at DIFFERENT granularities — the overall multi-agent conversation's total length, versus one specific agent's own consecutive-reply behavior within that conversation — and a genuinely robust production AutoGen system should set BOTH bounds, since either one alone leaves a distinct runaway-execution risk unaddressed.
-
-9. **A production AutoGen system's assistant agent occasionally acts on a plausible-sounding but factually incorrect claim made by another agent earlier in a GroupChat conversation. Explain this in terms of Agent Fundamentals' concepts and propose a mitigation.**
-   Model answer: this is a direct, multi-agent-conversational instance of **Agent Fundamentals**' COMPOUNDING HALLUCINATION RISK concept — an earlier agent's incorrect (hallucinated) claim becomes part of the shared CONVERSATION HISTORY that every subsequent agent's turn is generated in the context of, and a later agent has no inherent mechanism to recognize that a specific earlier claim, despite sounding plausible, was actually incorrect, so it may build its own contribution on top of this flawed premise, exactly analogous to the compounding-error risk covered for single-agent loops and for **CrewAI**'s own multi-agent pipelines; the mitigation directly extends this same checkpoint-verification principle to AutoGen's conversational context: introduce an explicit, dedicated VERIFIER or FACT-CHECKING agent into the GroupChat (or as an additional conversational turn in a simpler assistant/user-proxy setup) specifically tasked with reviewing claims made earlier in the conversation against available ground truth (e.g., actual execution results, or a retrieval-augmented check against a trusted source, directly connecting to the **Vector Search** skill) BEFORE the conversation is allowed to proceed to a stage where other agents build significant further work on top of that claim — directly analogous to CrewAI's own verification-task mitigation, but implemented as an additional conversational participant/turn rather than a distinct pipeline stage.
-
-10. **Design an AutoGen-based system for an automated code-review workflow where a "submitter" agent proposes code changes, a "reviewer" agent critiques them, and a human must explicitly approve before any change is actually merged. Explain your choice of conversational pattern and human_input_mode configuration.**
-    Model answer: I'd use a GroupChat (rather than a simple two-agent pairing) with three participants: a Submitter (AssistantAgent proposing code changes), a Reviewer (AssistantAgent critiquing the proposal and either approving or requesting revisions), and a UserProxyAgent representing the human merge-approval gate; I'd configure custom speaker-selection logic (rather than relying on default LLM-driven speaker selection) to enforce a DETERMINISTIC turn order — Submitter proposes, Reviewer critiques, and if the Reviewer's critique indicates revisions are needed, control returns to the Submitter (a bounded cycle, directly analogous to CrewAI's and LangGraph's own reflection-loop patterns, with an explicit max-round bound to prevent an unproductive, indefinite revision cycle); critically, I'd configure the UserProxyAgent's \`human_input_mode="ALWAYS"\` specifically for the FINAL merge-approval step — directly implementing **Agent Fundamentals**' fully human-supervised autonomy tier for this genuinely high-stakes, hard-to-reverse action (merging code changes) — even though the Submitter-Reviewer back-and-forth itself can proceed largely autonomously (a lower-stakes, more easily-reversible iterative refinement process), directly mirroring the PER-ACTION, tiered-autonomy design principle established in **Agent Fundamentals** and concretely demonstrated in the **LangGraph** skill's own interrupt-checkpoint treatment — autonomy should be calibrated to the SPECIFIC action's genuine stakes, not applied uniformly across an entire workflow.
+6. *A GroupChat conversation is taking far longer and costing far more than expected. How do you debug it?* Inspect the full chat_history and round count against the configured ceiling; check whether speaker selection (if "auto") is behaving sensibly or thrashing between agents; look for near-repeated content across turns signaling a genuine loop versus real incremental progress; check whether a critic-style agent lacks an external rubric and is endlessly nitpicking.
+7. *Design a coding-assistant conversation for a company's internal tooling. How many agents, and why?* Start with the minimal assistant/user-proxy pair with sandboxed code execution and a test-suite-based termination check; only add a dedicated critic agent if you can show, on a golden set, that its review measurably improves final code quality over the two-agent baseline, given the added cost of a third participant.
+8. *When would you choose AutoGen over CrewAI, and vice versa, for a given project?* AutoGen when the task's value comes from genuinely open-ended, iterative back-and-forth (unknown number of rounds, a real need for distinct perspectives colliding) — most classically, code-execution-driven iterative development; CrewAI when the division of labor and rough execution order are known in advance and a more declarative, task-based abstraction with less unpredictability is preferable.
+9. *How do you prevent two agents from simply agreeing with each other without real progress?* Give a critic-style agent an explicit, external, checkable rubric or test suite rather than relying on subjective LLM judgment; use a genuinely distinct model or adversarially-incentivized persona for the critic; monitor rounds-to-termination for anomalously fast agreement correlated with lower downstream quality.
+10. *How would you test a multi-agent AutoGen conversation given the non-determinism of LLM output?* Unit test deterministic wiring (termination logic, speaker-transition constraints, executor configuration) without a real LLM call; integration test against a golden set at the full-conversation level using outcome-based assertions (did tests pass, did termination occur within an expected range) or LLM-as-judge scoring, never exact transcript text.
+11. *A GroupChat that started with three agents has grown to seven over several months. What's the concern, and how do you address it?* Cost and unpredictability have likely grown roughly with roster size and round count, often without a matching quality improvement; audit each agent's justification, check for role overlap or redundant participants, and consider constraining speaker transitions or splitting into smaller nested conversations.
+12. *How do you decide whether conversation-driven orchestration is worth its unpredictability and cost for a given problem?* Compare against a fixed-pipeline (CrewAI-style) or single-agent baseline on a golden set for both quality and cost/latency/predictability; only adopt the conversational model if it produces a measurable quality improvement that justifies the added LLM-call multiplier and the operational risk of non-terminating or agreement-without-progress conversations.
 `,
 
   "coding-questions": `
-### 1. Build a bounded assistant/user-proxy code-generation loop
+### 1. Build a minimal two-agent coding conversation with sandboxed execution (core skill, asked in some form constantly)
 
 ~~~python
 from autogen import AssistantAgent, UserProxyAgent
+from autogen.coding import DockerCommandLineCodeExecutor
 
-def build_coding_pair(model_config):
-    assistant = AssistantAgent(name="assistant", system_message="You write correct, working Python code.", llm_config=model_config)
+def build_coding_conversation(model_name: str = "gpt-4o-mini"):
+    """Two-agent conversation: assistant proposes code, user proxy
+    executes it in a sandbox and reports results back."""
+    llm_config = {"config_list": [{"model": model_name, "timeout": 30}]}
+
+    assistant = AssistantAgent(
+        name="assistant",
+        system_message=(
+            "You write correct, tested Python code. Reply exactly "
+            "'TERMINATE' once tests pass and the task is complete."
+        ),
+        llm_config=llm_config,
+    )
+
+    executor = DockerCommandLineCodeExecutor(
+        image="python:3.12-slim", timeout=60, work_dir="coding",
+    )
+
+    def is_termination_msg(msg):
+        return "TERMINATE" in (msg.get("content") or "")
+
     user_proxy = UserProxyAgent(
         name="user_proxy",
         human_input_mode="NEVER",
-        code_execution_config={"work_dir": "coding", "use_docker": True},
         max_consecutive_auto_reply=8,
-        is_termination_msg=lambda msg: "TERMINATE" in msg.get("content", ""),
+        code_execution_config={"executor": executor},
+        is_termination_msg=is_termination_msg,
     )
     return assistant, user_proxy
-# Follow-up: why is is_termination_msg an important piece of
-# this configuration, alongside max_consecutive_auto_reply?
+
+# assistant, user_proxy = build_coding_conversation()
+# try:
+#     result = user_proxy.initiate_chat(
+#         assistant,
+#         message="Write fib(n) with unit tests, run them, fix any failures.",
+#     )
+# except Exception as exc:
+#     # A conversation is not transactional — earlier turns (and any
+#     # code they executed) may have already happened even if a later
+#     # call fails.
+#     raise RuntimeError(f"AutoGen conversation failed: {exc}") from exc
 ~~~
 
-### 2. Configure a bounded GroupChat with custom speaker selection
+Complexity: end-to-end latency is roughly additive across turns (at least one LLM call per turn, plus sandbox execution time for code turns), so a conversation that needs three fix-and-retry cycles costs and takes at minimum roughly six LLM calls plus three sandbox executions. Follow-ups: add a critic agent as a third participant and reason about whether it earns its added cost; swap the phrase-only termination check for one that also verifies the executor's last reported exit code was zero.
+
+### 2. Detect a non-terminating or looping conversation from its transcript
 
 ~~~python
-from autogen import GroupChat, GroupChatManager
+def detect_stalled_conversation(chat_history: list[dict], similarity_threshold: float = 0.9) -> dict:
+    """
+    Flags a conversation as likely stalled/looping if the last few
+    messages from the same speaker are near-duplicates of each other,
+    which signals no real progress rather than a genuinely long but
+    productive back-and-forth.
+    """
+    from difflib import SequenceMatcher
 
-def build_review_groupchat(submitter, reviewer, user_proxy, model_config):
-    def speaker_selection(last_speaker, groupchat):
-        if last_speaker is submitter:
-            return reviewer
-        if last_speaker is reviewer:
-            return user_proxy
-        return submitter
+    by_speaker: dict[str, list[str]] = {}
+    for msg in chat_history:
+        speaker = msg.get("name", msg.get("role", "unknown"))
+        by_speaker.setdefault(speaker, []).append(msg.get("content") or "")
 
-    groupchat = GroupChat(
-        agents=[submitter, reviewer, user_proxy],
-        messages=[],
-        max_round=12,
-        speaker_selection_method=speaker_selection,
-    )
-    return GroupChatManager(groupchat=groupchat, llm_config=model_config)
-# Follow-up: why might custom speaker selection be preferable
-# to the default LLM-driven speaker selection for this
-# specific code-review workflow?
+    flagged = {}
+    for speaker, messages in by_speaker.items():
+        if len(messages) < 2:
+            continue
+        last_two = messages[-2:]
+        ratio = SequenceMatcher(None, last_two[0], last_two[1]).ratio()
+        if ratio >= similarity_threshold:
+            flagged[speaker] = ratio
+
+    return {"total_turns": len(chat_history), "flagged_speakers": flagged}
 ~~~
 
-### 3. Implement a human-approval checkpoint via human_input_mode
+Discussion points: why a similarity-based heuristic is a pragmatic first defense rather than a perfect one (legitimate iterative refinement can also look similar turn to turn if progress is incremental); how this connects to the max_round/max_consecutive_auto_reply caps discussed in Best Practices; how you'd wire this into a monitoring alert rather than just a one-off script.
+
+### 3. Give a critic agent an objective, external verification step instead of subjective review
 
 ~~~python
-from autogen import UserProxyAgent
+import subprocess
 
-def build_approval_gate():
-    return UserProxyAgent(
-        name="merge_approver",
-        human_input_mode="ALWAYS",  # every turn requires explicit
-                                      # human input -- directly
-                                      # Agent Fundamentals' fully
-                                      # human-supervised tier
-        code_execution_config=False,  # this proxy only approves,
-                                        # doesn't execute code itself
+def run_tests_and_summarize(code_dir: str) -> str:
+    """
+    Runs the actual test suite generated alongside proposed code and
+    returns a structured, factual summary — used as the critic's
+    input instead of trusting the critic's own subjective read of
+    whether code "looks correct."
+    """
+    proc = subprocess.run(
+        ["python", "-m", "pytest", code_dir, "-q"],
+        capture_output=True, text=True, timeout=60,
     )
-# Follow-up: why does setting code_execution_config=False make
-# sense for an agent whose sole purpose is human approval?
+    passed = proc.returncode == 0
+    return (
+        f"Tests {'PASSED' if passed else 'FAILED'}.\\n"
+        f"stdout (last 500 chars): {proc.stdout[-500:]}\\n"
+        f"stderr (last 500 chars): {proc.stderr[-500:]}"
+    )
+
+def build_critic_reply(code_dir: str) -> str:
+    """
+    Feeds objective test results into the critic's next message
+    rather than asking it to review code purely on its own judgment —
+    directly mitigating the 'agents agreeing without real progress'
+    failure mode.
+    """
+    test_summary = run_tests_and_summarize(code_dir)
+    if "PASSED" in test_summary:
+        return f"{test_summary}\\nLGTM."
+    return f"{test_summary}\\nTests failed — please fix and resubmit."
 ~~~
+
+Complexity: O(test-suite runtime) per verification call, generally far cheaper and more reliable than an additional LLM call for the same judgment. Follow-ups: wire build_critic_reply into a custom register_reply function on the critic agent so it always grounds its verdict in actual test output rather than subjective review; extend to also run a static analyzer or linter as an additional objective signal.
 `,
 
   "hands-on-labs": `
-### Lab 1 (Beginner): Build a basic assistant/user-proxy code-generation loop
-Build an assistant/user-proxy pair that generates and executes a simple Python script, with sandboxed execution and bounded consecutive replies. Deliverable: a working, tested code-generation-execution loop. Skills exercised: basic AutoGen setup and code-execution safety.
+### Lab 1 — Your first two-agent coding conversation (beginner, ~1h)
+Build the assistant/user-proxy pair from Coding Question 1 over a small coding task of your choice, with Docker-backed execution. Run it three times and compare the transcripts. Deliverable: a short write-up of what varied between runs (non-determinism, and whether termination fired cleanly each time) and why. Skills: ConversableAgent/AssistantAgent/UserProxyAgent basics, sandboxed code execution.
 
-### Lab 2 (Intermediate): Build a bounded GroupChat with custom speaker selection
-Build a GroupChat with at least three agents and custom, deterministic speaker-selection logic. Deliverable: a working, tested GroupChat with a documented, predictable turn order. Skills exercised: applied GroupChat coordination design.
+### Lab 2 — Fixed pipeline vs. conversation, head to head (intermediate, ~2h)
+Take a task with a genuinely iterative shape (write code, run it, fix bugs until tests pass) and implement it two ways: as the AutoGen two-agent conversation, and as a fixed, pre-planned sequence of steps (e.g., a CrewAI-style task pipeline, or plain code) with no feedback loop. Compare output correctness, total tokens, and latency across 10 runs each. Deliverable: a table with your findings and a written recommendation for which approach you'd ship for this specific task, and why. Skills: honest cost/benefit evaluation of conversation-driven orchestration, the core question this page argues you must answer for every use case.
 
-### Lab 3 (Advanced): Implement a human-approval checkpoint for a high-stakes action
-Build a workflow where most steps proceed autonomously but a specific, high-stakes final action requires explicit human approval via human_input_mode. Deliverable: a working, tested tiered-autonomy AutoGen system. Skills exercised: applied autonomy calibration in a conversational framework.
+### Lab 3 — Fixing "agents agreeing too easily" (advanced, ~3h)
+Build a coder/critic conversation where the critic only has a subjective "review carefully" instruction, and deliberately feed it a solution with a known, findable bug; observe how often the critic misses it. Then rewire the critic to use an objective test-suite check (Coding Question 3) and re-run the same experiment. Deliverable: a before/after comparison quantifying the improvement in bug-catch rate. Skills: diagnosing and fixing the reflection-without-verification failure mode.
 
-### Lab 4 (Production): Build a verified multi-agent conversation mitigating compounding errors
-Build a GroupChat with an explicit verifier agent checking earlier claims before the conversation proceeds to a later, dependent stage. Deliverable: a documented demonstration of the verifier catching an intentionally-introduced incorrect claim. Skills exercised: applied compounding-error mitigation in a conversational multi-agent system.
+### Lab 4 — Production-shaped conversation service (production, ~4h)
+Wrap a two-agent (or small GroupChat) conversation in a FastAPI service with an async job-queue execution path (not synchronous request/response), a Docker-backed sandbox running as a separate isolated container, termination logic pairing a phrase check with a numeric ceiling, structured logging of per-conversation round count and cost, a /healthz endpoint, and a multi-stage Dockerfile. Load test and report cost and latency per request, broken down per turn. Skills: the full production section, end to end.
 `,
 
   "real-projects": `
-### 1. An automated coding assistant with sandboxed execution
-Engineering requirements: assistant/user-proxy pairing, Docker-sandboxed code execution, bounded consecutive replies, and a clear termination signal.
+Portfolio-grade projects (each maps to skills employers screen for in AI-engineering roles):
 
-### 2. A collaborative code-review workflow
-Engineering requirements: a GroupChat with submitter, reviewer, and human-approval-gate agents, custom deterministic speaker selection, and human_input_mode="ALWAYS" for the final merge decision.
+1. **Self-correcting coding assistant** — An assistant/user-proxy conversation that writes code, runs a generated test suite in a Docker sandbox, and iterates until tests pass or a round ceiling is hit, with an objective critic step (Coding Question 3) verifying correctness rather than trusting subjective review, and a golden-set evaluation comparing conversation-driven correction against a single-shot (no feedback loop) baseline. Demonstrates: honest cost/benefit justification for conversation-driven orchestration, safe code execution, evaluation discipline.
 
-### 3. A multi-perspective technical design discussion system
-Engineering requirements: an open-ended GroupChat among several specialist agents, with a fact-checking/verification agent mitigating compounding hallucination across the discussion.
+2. **Constrained GroupChat for a multi-step review workflow** — A three-agent GroupChat (drafter, fact-checker, editor) with explicit allowed_or_disallowed_speaker_transitions rather than unconstrained "auto" selection, composed to bound both cost and unpredictability while still allowing genuine back-and-forth revision. Demonstrates: knowing when a conversational model needs structure layered on top, and measuring the tradeoff against a fully declarative task pipeline.
+
+3. **Runaway-conversation guardrail library** — A standalone monitoring/guardrail layer that wraps any AutoGen conversation with max_round/max_consecutive_auto_reply enforcement, near-duplicate-message loop detection (Coding Question 2), and clean-termination-rate tracking, packaged so it could plug into any team's existing AutoGen-based service. Demonstrates: the production-hardening instincts that separate a demo conversation from one a senior engineer would actually deploy.
+
+Each project: src layout, typed Python, a small pytest suite covering deterministic wiring (termination logic, speaker-transition constraints, executor configuration) plus a golden-set regression test at the full-conversation level, CI via GitHub Actions, and a README with an architecture diagram and an explicit "why a conversation, not a fixed pipeline" justification section — that justification is what separates a "multi-agent chat demo" from a project a senior interviewer takes seriously.
 `,
 
   "case-studies": `
-### AutoGen's research origins shaping its distinctly conversational design
-AutoGen's emergence from Microsoft Research, with an explicit focus on exploring how multiple LLM-powered agents could collaborate through flexible dialogue, directly shaped its conversation-centric abstractions — a genuinely different design lineage from the more product-oriented paths taken by CrewAI and the OpenAI Agents SDK. Lesson: a framework's origin context (research exploration versus product engineering) often leaves a lasting, visible imprint on its core design philosophy and the kinds of use cases it ends up being particularly well-suited for.
+### The AutoGen 0.4 rearchitecture: separating runtime from convenience API
+Microsoft's split into Core, AgentChat, and Extensions followed real feedback that the original single-layer ConversableAgent design conflated a general-purpose, event-driven agent runtime with a specific, opinionated conversational-agent convenience API — teams needing tighter control over messaging, routing, or non-chat agent topologies were fighting assumptions baked into the original design. Lesson: nearly every popular agent framework eventually splits a lower-level runtime from a higher-level convenience layer once enough production users need more control than the original all-in-one API exposed — the same pattern visible in CrewAI's Flows arriving above Crews.
 
-### The AutoGen 0.4/AgentChat restructuring as a response to accumulated production experience
-AutoGen's architectural evolution toward a more modular, extensible core directly parallels the same kind of accumulated-practical-experience-driven evolution covered in the **LangChain** skill's own LCEL case study. Lesson: even a well-established, research-originated framework benefits from architectural restructuring as genuine production usage reveals an earlier design's limitations — research-quality code and production-quality code often have genuinely different structural needs, and recognizing this gap (rather than indefinitely patching the original design) is a mark of a maturing project.
+### The AG2 fork: governance as an architectural fork point
+AG2 emerged from a governance disagreement within the AutoGen community, continuing development of an architecture closer to the pre-0.4 design under independent stewardship, while Microsoft's own AutoGen continued its own rearchitected path in parallel. Lesson: for widely-adopted open-source infrastructure, governance decisions can produce genuine architectural forks, not just naming disputes — evaluating "which AutoGen" a tutorial, tool, or team is actually using is a real, practical due-diligence step, not pedantry.
+
+### Magentic-One: AutoGen as a substrate for a higher-level product
+Microsoft built Magentic-One, a general-purpose multi-agent system for web/file/code task completion, directly on top of AutoGen's Core runtime rather than the AgentChat convenience layer alone. Lesson: a framework's lower-level runtime layer often ends up serving as the substrate for more opinionated, product-facing systems built by the same or different teams — a useful signal that a framework's "boring" internal layer can matter as much as its headline developer-facing API.
+
+### Coding-assistant adoption and the propose/execute split
+AutoGen's split between an assistant that proposes code and a user proxy that executes it (rather than one agent doing both) proved to be a durable, widely-copied design choice across the broader agent ecosystem, echoing a code-review-style separation of concerns that predates LLM agents entirely. Lesson: design choices that map onto an existing, well-understood human workflow (a developer proposing a change, a reviewer or CI system running it) tend to generalize and get reused well beyond the framework that popularized them.
 `,
 
   comparisons: `
-| Aspect | AutoGen | CrewAI | LangGraph |
-|--------|----------------|--------------|------------------------|
-| Core metaphor | Conversation between agents | Team of specialized roles | Explicit graph (nodes/edges) |
-| Coordination | Message-passing, speaker selection | Sequential/hierarchical process | Conditional edges, explicit state |
-| Distinguishing strength | Code-generation-execution loops | Fast role-based team setup | Precise, arbitrary structural control |
-| Determinism | Lower by default (LLM-driven turn-taking) | Moderate (defined process types) | Highest (explicit, code-level) |
+| Dimension | AutoGen | CrewAI | LangGraph | OpenAI Agents SDK |
+|-----------|---------|--------|-----------|--------------------|
+| Core mental model | Conversation-driven — agents exchange messages in a shared chat; control flow is "who speaks next" | Role-based team of specialized agents executing declared tasks under a process | Explicit graph/state machine you hand-wire | Lightweight, provider-native agent/tool-calling primitives |
+| Control-flow style | Emergent, driven by conversational turns and (optionally) speaker-selection logic | Declarative (sequential/hierarchical process), with Flows for more explicit control | Explicit, hand-designed (nodes, edges, conditional branching) | Explicit but minimal — closer to raw agent loop plus handoffs |
+| Best default use case | Open-ended, iterative back-and-forth with an unknown round count — classically, propose-execute-observe-fix coding loops and debate/critique patterns | A task that naturally decomposes into distinct specialist roles with known (or plannable) division of labor | Complex, precisely branching pipelines needing fine-grained state control | Simple, provider-native agents and handoffs without heavy orchestration abstraction |
+| Native code execution | First-class (UserProxyAgent + sandboxed executor) | Via an attached tool, not a first-class conversational primitive | Via an attached tool/node, not a first-class primitive | Via an attached tool |
+| Predictability | Lower by default — conversation length and speaker order can be dynamic; improves with constrained transitions and hard round ceilings | Sequential is predictable; hierarchical/delegation trades predictability for flexibility | High — you designed the exact control flow | High for simple flows; less structure for complex multi-agent cases |
+| Coordination overhead risk | Real — non-terminating conversations and agents agreeing without real progress are documented failure modes | Real — redundant work, agents talking past each other, and delegation loops are documented failure modes | Lower — you control exactly which node runs when | Lower — minimal abstraction means less to go wrong, but also less built-in structure for complex cases |
 
-**How seniors choose**: default to AutoGen specifically for code-generation-execution workflows or genuinely open-ended, conversational multi-agent collaboration; choose CrewAI for fast, role-decomposable team setup; choose LangGraph for precise, deterministic structural control; consider custom speaker-selection logic within AutoGen to narrow the determinism gap when a specific workflow needs it.
+**How seniors choose**: reach for AutoGen when a problem's value genuinely comes from open-ended, iterative dialogue whose length can't be known upfront — most classically, generating code, running it, and fixing it based on real execution feedback, or a genuinely adversarial critique/debate pattern — but only after confirming (ideally with a golden-set comparison) that a fixed pipeline or single well-tooled agent doesn't already do the job more predictably and cheaply. Reach for CrewAI when the division of labor is known or plannable and a more declarative, task-based abstraction with less unpredictability is preferable. Reach for LangGraph when the pipeline has real branching complexity or state-management needs that benefit from explicit, hand-designed control flow. Reach for the OpenAI Agents SDK when you want the lightest possible abstraction over provider-native primitives, without committing to a heavier multi-agent framework's opinions. None of these is definitively superior across the board — this is a genuinely fast-evolving space, and the honest answer for most real projects is to prototype the simplest option first, and add conversational or graph-based machinery only once a concrete, measured limitation justifies it.
+
+See also the **Agent Fundamentals** skill for the single-agent baseline every one of these comparisons should be measured against, the **Reflection** skill for the deeper theory behind why LLM-to-LLM critique often under-delivers without external verification, and the **Planning** skill for the general planning/delegation failure modes that show up across all multi-agent frameworks, not just AutoGen.
 `,
 
   "related-technologies": `
-- **Agent Fundamentals** — the plan-act-observe loop, multi-agent decomposition, and human-in-the-loop concepts AutoGen concretely implements via its conversational model.
-- **Guardrails** — the action-level constraint guidance directly applicable to AutoGen's code-execution safety considerations.
-- **LangGraph**, **CrewAI**, **OpenAI Agents SDK** — alternative multi-agent orchestration approaches this page directly compares against.
-- **Agent Memory** — covered next in this category, directly relevant to managing AutoGen's own growing conversation history/context.
+- **Agent Fundamentals** — the single-agent reason-act-observe loop that every AutoGen agent's individual turn is built from underneath; read this first, since a conversation is fundamentally several of these loops composed together via a shared message history, not a different execution primitive.
+- **Tool Calling** — how agents invoke external capabilities; AutoGen's code-execution loop is a specialized, first-class case of this general pattern, and custom register_reply functions can wire in arbitrary tool-like logic.
+- **Reflection** — the general pattern of an agent (or a second agent) checking and revising work; AutoGen's critic/producer conversational pattern is a direct, framework-level implementation of reflection, and understanding reflection's known limits explains why AutoGen critics need external verification, not just subjective review.
+- **Planning** — GroupChat speaker-selection and multi-agent task decomposition overlap heavily with general agentic-planning concerns and failure modes.
+- **CrewAI** — the role-based, task-declarative alternative, a better fit when the division of labor is known or plannable in advance rather than genuinely open-ended.
+- **LangGraph** — the more explicit, hand-wired graph/state-machine alternative for complex control flow, useful when AutoGen's conversational model trades away more predictability than a project needs.
+- **OpenAI Agents SDK** — a lighter-weight, provider-native alternative for simpler agent and handoff patterns without adopting a full multi-agent framework's opinions.
+- **Agent Memory** — the shared conversation history in AutoGen is itself a form of memory across turns; the same tradeoffs (what to keep, summarize, or drop as a conversation grows long) apply directly.
+- **AI Evals** — the general discipline of measuring whether a system (single-agent, task-pipeline, or conversation-driven) actually works, directly relevant to the golden-set comparisons this page repeatedly recommends before adopting conversation-driven orchestration.
+- **Python** — the language every AutoGen conversation is written in; async fluency and Docker familiarity directly improve both concurrency and safe code-execution setup.
 
-Learning path: **Agent Fundamentals** → **LangChain** → **LangGraph** → **CrewAI** → **OpenAI Agents SDK** → this page (AutoGen) → **Agent Memory** → the remaining capability-focused skills in this category.
+On this platform, a natural learning path: **Agent Fundamentals** → **Tool Calling** → **Planning** / **Reflection** → **AutoGen (this page)** → **CrewAI** / **LangGraph** / **OpenAI Agents SDK** for the broader multi-agent orchestration landscape.
 `,
 
   "latest-updates": `
-Knowledge cutoff for this page: January 2026. As of that cutoff:
+Verified against the author's knowledge through roughly early-to-mid 2025 — check the official AutoGen (and, separately, AG2) documentation and changelogs for anything newer, since this space, like most of the agent-orchestration ecosystem, has continued to move quickly and in more than one direction at once.
 
-- AutoGen continues to be positioned as a research-originated, conversation-centric framework particularly strong in code-generation-execution workflows, with continued refinement following its 0.4/AgentChat architectural restructuring.
-- Continued growth of AutoGen Studio for lower-code multi-agent system construction and testing.
-- Continued integration with Microsoft's broader AI tooling ecosystem.
-- Given continued, active framework evolution, verify current best-practice recommendations against AutoGen's up-to-date official documentation.
+- **The AutoGen 0.4 layered rearchitecture (Core, AgentChat, Extensions) has continued to mature**, with AgentChat solidifying as the recommended entry point for most conversational multi-agent use cases and Core serving lower-level, more custom runtime needs. Verify the current recommended entry point and import paths in the docs before starting a new project, since class names and package structure changed meaningfully across this rearchitecture.
+- **AG2, the community-maintained fork, has continued independent development** of an architecture closer to the pre-0.4 design — treat "AutoGen" and "AG2" as related but now-distinct projects when reading tutorials, and check which one a given piece of content or dependency actually targets.
+- **Magentic-One and related Microsoft Research systems** built on AutoGen's Core runtime illustrate the framework's growing role as a substrate for higher-level, product-facing multi-agent systems, not only a library end-developers wire up directly.
+- **Continued growth of code-execution tooling and sandboxing options** (executor abstractions beyond the original bare Docker flag) reflects broader ecosystem emphasis on making LLM-driven code execution safer and more configurable by default.
+- **General ecosystem note**: as with any framework this actively competing with CrewAI and LangGraph for multi-agent mindshare, and now split across two related-but-distinct codebases (AutoGen and AG2), specific class names, constructor signatures, and recommended patterns should be treated as likely to have shifted since this page was written — always cross-check against current official docs before committing to an approach in a new project.
 `,
 
   "future-roadmap": `
-Where AutoGen is heading, and what's worth betting career time on:
+Where AutoGen (and the broader conversation-driven multi-agent space it helped establish) appears to be heading, and what's worth betting career time on:
 
-- **Continued refinement of its modular, extensible core** (the Core/AgentChat separation) following accumulated production experience.
-- **Continued strength and adoption specifically within code-generation-execution and research-oriented multi-agent use cases.**
-- **Continued growth of lower-code tooling** (AutoGen Studio) broadening accessibility.
-- **What to bet on**: deeply understanding the general principle of conversation-centric multi-agent design (conversable agents, flexible speaker selection, code execution as a first-class capability) — this transfers directly across AutoGen versions and informs sound judgment even when working with alternative, more structurally-explicit frameworks.
+1. **Continued convergence toward hybrid conversational-plus-explicit control**, with constrained speaker-transition graphs, nested chats, and Core's event-driven runtime becoming the default way to compose predictable structure around otherwise open-ended conversations — mirroring the same pattern visible across CrewAI (Flows) and the broader multi-agent framework space, not just AutoGen.
+2. **Sharper built-in guardrails against known failure modes** (non-terminating conversations, agreement-without-progress critique) are a plausible direction, given how consistently these show up as the leading production complaints about conversation-driven multi-agent systems industry-wide.
+3. **Deeper integration of objective external verification into critic/reflection patterns** (test suites, static analyzers, schema validators wired directly into the conversational loop) rather than relying on a second LLM's subjective judgment, addressing the "agents agreeing too easily" problem at the framework level rather than leaving it entirely to application code.
+4. **Continued parallel evolution of AutoGen and AG2**, with no clear signal (as of this writing) that either will fully absorb or displace the other — expect continued feature convergence (both likely growing better guardrails and observability) alongside genuine architectural divergence over time.
+5. **Ongoing competition with CrewAI and LangGraph** for multi-agent mindshare, with no framework in this space having established a clearly dominant, durable advantage — expect continued convergence of capabilities (all three growing more explicit control-flow options, all three growing better observability and evaluation tooling) rather than one approach definitively winning.
+
+For your career: the durable, transferable skill here is not memorizing AutoGen's exact API (which has already changed substantially once and will likely again) but understanding the underlying tradeoffs of conversation-driven orchestration — when open-ended, iterative dialogue between agents genuinely helps, when it adds pure coordination overhead and cost, and how to bound and verify it responsibly — since that judgment transfers directly to whatever the next popular conversational multi-agent framework turns out to be.
 `,
 
   "cheat-sheet": `
-~~~
-# ---- Core abstractions ----
-ConversableAgent          # base: sends/receives messages
-AssistantAgent(name, system_message, llm_config)
-UserProxyAgent(name, human_input_mode, code_execution_config,
-               max_consecutive_auto_reply)
-~~~
+~~~python
+# --- Core primitives ---
+from autogen import ConversableAgent, AssistantAgent, UserProxyAgent
+from autogen import GroupChat, GroupChatManager
+from autogen.coding import DockerCommandLineCodeExecutor
 
-~~~
-# ---- Assistant/User-Proxy pattern ----
-Assistant PROPOSES (e.g., code) -> User-Proxy EXECUTES and
-    reports results -> cycle repeats until termination signal.
-Directly Agent Fundamentals' plan-act-observe loop, as a
-    two-participant CONVERSATION.
-~~~
+llm_config = {"config_list": [{"model": "gpt-4o-mini", "timeout": 30}]}
 
-~~~
-# ---- human_input_mode (= Agent Fundamentals autonomy tiers) ----
-"NEVER"      -> fully autonomous
-"ALWAYS"     -> fully human-supervised (every turn)
-"TERMINATE"  -> human input only when conversation would end
-~~~
+assistant = AssistantAgent(
+    name="assistant",
+    system_message="You write correct, tested code. Reply exactly "
+                    "'TERMINATE' once the task is fully verified.",
+    llm_config=llm_config,
+)
 
-~~~
-# ---- GroupChat (3+ agents) ----
-GroupChat(agents=[...], messages=[], max_round=N,
-          speaker_selection_method=custom_fn)  # optional,
-                                                  # more deterministic
-GroupChatManager(groupchat=..., llm_config=...)
-~~~
+executor = DockerCommandLineCodeExecutor(
+    image="python:3.12-slim", timeout=60, work_dir="coding",
+)
 
-~~~
-# ---- Non-negotiables ----
-ALWAYS sandbox code execution: use_docker=True
-ALWAYS bound: max_round + max_consecutive_auto_reply
-Choose human_input_mode per genuine task stakes, not uniformly
-Design a clear termination signal (e.g., "TERMINATE" keyword)
+def is_termination_msg(msg):
+    return "TERMINATE" in (msg.get("content") or "")
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",       # ALWAYS | TERMINATE | NEVER
+    max_consecutive_auto_reply=8,   # hard circuit breaker
+    code_execution_config={"executor": executor},  # always sandboxed
+    is_termination_msg=is_termination_msg,
+)
+
+# --- Two-agent conversation ---
+result = user_proxy.initiate_chat(assistant, message="Write fib(n) with tests.")
+print(result.chat_history)
+print(result.cost)
+
+# --- GroupChat: 3+ agents, configurable speaker selection ---
+groupchat = GroupChat(
+    agents=[user_proxy, coder, critic],
+    messages=[],
+    max_round=12,                          # hard ceiling on total turns
+    speaker_selection_method="round_robin", # prefer over unconstrained "auto"
+)
+manager = GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+user_proxy.initiate_chat(manager, message="...")
+
+# --- Constrain speaker transitions instead of unconstrained auto ---
+groupchat = GroupChat(
+    agents=[user_proxy, coder, critic],
+    messages=[],
+    max_round=12,
+    speaker_selection_method="auto",
+    allowed_or_disallowed_speaker_transitions={
+        user_proxy: [coder], coder: [critic], critic: [coder, user_proxy],
+    },
+    speaker_transitions_type="allowed",
+)
+
+# --- Custom reply logic ---
+def custom_reply(recipient, messages, sender, config):
+    if "urgent" in (messages[-1]["content"] or "").lower():
+        return True, "Escalating to a human reviewer."
+    return False, None
+user_proxy.register_reply([AssistantAgent, None], custom_reply, position=0)
+
+# --- Production guardrails ---
+# - always pair termination-phrase check with a numeric ceiling
+# - always sandbox code execution (Docker, timeout, no bare local exec)
+# - prefer round_robin/constrained transitions over unconstrained "auto"
+# - give critic agents an external test suite/rubric, not just "review carefully"
+# - log full transcripts + per-conversation cost/round-count
+# - always compare against a single-agent or fixed-pipeline baseline before shipping
 ~~~
 `,
 
   "flash-cards": `
-| Question | Answer |
-|----------|--------|
-| What is AutoGen? | Microsoft's conversation-centric multi-agent framework. |
-| What is the assistant/user-proxy pattern? | Assistant proposes (e.g., code); user-proxy executes and reports back. |
-| What does human_input_mode control? | Autonomy level: NEVER (auto), ALWAYS (human every turn), TERMINATE (conditional). |
-| What is GroupChat? | Coordinates conversation among 3+ agents via a manager selecting the next speaker. |
-| Why sandbox code execution? | Model-generated code executed automatically is a genuine, distinct risk surface. |
-| Why bound max_round AND max_consecutive_auto_reply? | They guard different failure modes: whole-group vs. one agent's reply loop. |
-| AutoGen vs. CrewAI's core metaphor? | Conversation between agents vs. a team of role-based specialists. |
-| AutoGen vs. LangGraph on determinism? | AutoGen's default speaker selection is LLM-driven (flexible); LangGraph is explicit (deterministic). |
-| Fix for compounding hallucination in a GroupChat? | Add a dedicated verifier/fact-checking agent before others build on a claim. |
-| Why use custom speaker-selection logic? | Adds determinism to a workflow that needs a predictable, not LLM-guessed, turn order. |
+| Front | Back |
+|-------|------|
+| What is a ConversableAgent? | The base class for any AutoGen participant that can send/receive messages and generate replies via pluggable logic (LLM call, code execution, human input, custom function) |
+| AssistantAgent vs UserProxyAgent? | AssistantAgent is an LLM-backed reasoner that proposes solutions (including code) but never executes anything; UserProxyAgent represents a human or automated executor that can run proposed code and relay human input |
+| Why split "propose code" from "run code" across two agents? | Mirrors a code-review-style separation of concerns and makes the execution boundary an explicit, gate-able point rather than one agent silently executing whatever it generates |
+| What does human_input_mode control? | How often a UserProxyAgent pauses for real human input — ALWAYS, TERMINATE (near the end only), or NEVER |
+| What does a GroupChatManager do? | Decides, each round, which agent in the roster speaks next (via speaker_selection_method), acting as the conversation's orchestrator |
+| Why pair a termination-phrase check with a numeric ceiling? | An LLM can fail to emit, paraphrase, or prematurely emit a termination phrase; the numeric ceiling (max_round/max_consecutive_auto_reply) is a mandatory backstop |
+| Biggest AutoGen-specific security risk? | Running LLM-generated code unsandboxed; always use a Docker-backed (or equivalent isolated) executor with a timeout |
+| "Agents agreeing without real progress" — root cause and fix? | Subjective LLM-to-LLM review with no external check; fix by giving the critic an objective rubric, test suite, or a genuinely distinct/adversarial persona |
+| "Conversations that loop without terminating" — root cause and fix? | Fragile termination-phrase matching with no numeric ceiling; fix by pairing both, and by making the termination criterion concrete and checkable |
+| AutoGen vs CrewAI, one-line? | AutoGen models collaboration as an open-ended conversation with unknown round count; CrewAI models it as discrete tasks with a known or plannable order assigned to roles |
+| AutoGen vs LangGraph, one-line? | AutoGen trades precise control for conversational flexibility; LangGraph gives you an explicit, hand-wired graph with precise branching and state control |
+| What is AG2? | A community-maintained fork of AutoGen that split off after a governance disagreement, continuing an architecture closer to the pre-0.4 design under separate stewardship |
+| What are the three layers in AutoGen's 0.4 rearchitecture? | Core (low-level, event-driven agent runtime), AgentChat (higher-level conversational API), Extensions (integrations for either layer) |
+| What should you measure before shipping a conversation-driven design? | Quality and cost/latency/predictability against a fixed-pipeline or single-agent baseline on a golden set — never assume conversational orchestration is better without measuring |
+| Is an AutoGen conversation transactional? | No — several turns, and any code they executed, may have already happened even if a later turn fails; handle partial completion explicitly |
 `,
 
   mcqs: `
-1. What is AutoGen's core design philosophy?
-   A) An explicit graph of nodes and edges  B) Modeling multi-agent collaboration as a structured conversation between message-passing agents  C) A role/task/crew hierarchy  D) A single-agent tool-calling loop only
-   **Answer: B** — AutoGen's distinguishing, conversation-centric framing.
+**1. What is the primary distinction between an AssistantAgent and a UserProxyAgent in AutoGen?**
 
-2. What does the UserProxyAgent typically do in the assistant/user-proxy pattern?
-   A) Only generates text responses  B) Executes proposed code (or represents a human) and reports results back to the assistant  C) Trains the underlying model  D) Manages a vector database
-   **Answer: B** — directly implementing the "act" and "observe" steps of Agent Fundamentals' loop.
+A) They are functionally identical, just named differently  B) AssistantAgent is an LLM-backed reasoner that proposes solutions (including code) but never executes anything, while UserProxyAgent can execute code and relay human input  C) UserProxyAgent cannot use an LLM at all under any configuration  D) AssistantAgent always requires human approval before replying
 
-3. What does setting human_input_mode="ALWAYS" implement?
-   A) Fully autonomous execution  B) Agent Fundamentals' fully human-supervised autonomy tier — human input required at every turn  C) No effect on autonomy  D) Automatic code sandboxing
-   **Answer: B** — a direct, concrete implementation of the autonomy spectrum.
+**Answer: B** — this split mirrors a code-review-style separation of concerns: one participant proposes, another gates and executes.
 
-4. Why is sandboxing (e.g., Docker) critical for AutoGen's code-execution capability?
-   A) It's optional and rarely matters  B) Automated execution of model-generated code is a genuine, distinct risk surface requiring isolation from the host environment  C) It only affects speed  D) Sandboxing disables code execution entirely
-   **Answer: B** — a direct extension of Agent Fundamentals' and Guardrails' action-level safety guidance.
+**2. Why is relying solely on a termination phrase (e.g., "TERMINATE") considered risky in production?**
 
-5. When should a team consider custom speaker-selection logic in a GroupChat?
-   A) Never, default selection is always best  B) When the workflow benefits from a more deterministic, predictable turn order than the default LLM-driven selection provides  C) Only for single-agent systems  D) Custom selection is not supported
-   **Answer: B** — narrowing the flexibility-versus-determinism gap when a task needs it.
+A) AutoGen does not support termination phrases  B) An LLM can fail to emit, paraphrase, or prematurely emit the phrase, so a numeric ceiling is needed as a mandatory backstop  C) Termination phrases only work with GroupChat, not two-agent conversations  D) Termination phrases disable code execution
+
+**Answer: B** — always pair a phrase-based check with max_round/max_consecutive_auto_reply as a circuit breaker.
+
+**3. What is the recommended default for running LLM-generated code in AutoGen?**
+
+A) Directly on the host process, for simplicity  B) In a fully isolated, timeout-bounded sandbox such as a Docker-backed executor  C) Only inside a Jupyter notebook, which is inherently safe  D) AutoGen does not support code execution at all
+
+**Answer: B** — unsandboxed execution of LLM-generated code is a genuine security risk, not a hypothetical one.
+
+**4. Why do two LLM-backed agents in conversation sometimes "agree" quickly without real progress?**
+
+A) This never happens if both agents use the same model  B) Subjective LLM-to-LLM review, without an external rubric or test suite, frequently converges on confident agreement regardless of actual correctness  C) AutoGen forces agents to disagree by default  D) It only happens when human_input_mode is set to ALWAYS
+
+**Answer: B** — mitigations include giving a critic agent an objective, external check (tests, a rubric) rather than trusting subjective review alone.
+
+**5. What does the GroupChatManager's speaker_selection_method control?**
+
+A) Which LLM provider is used for the whole conversation  B) How the next speaker in a multi-agent conversation is chosen each round (e.g., auto/LLM-driven, round_robin, manual, or constrained transitions)  C) Whether code execution is sandboxed  D) The maximum token length of any single message
+
+**Answer: B** — "auto" adds a real per-round LLM call and unpredictability; round_robin or explicit transition constraints are cheaper and more predictable once a workflow's shape is known.
+
+**6. How does AutoGen's core mental model differ most from CrewAI's?**
+
+A) AutoGen cannot execute code; CrewAI can only execute code  B) AutoGen models collaboration as an open-ended conversation with an unknown number of turns; CrewAI structures work as discrete tasks with a known or plannable order assigned to specialized roles  C) They are functionally identical frameworks with different names  D) CrewAI does not support multiple agents
+
+**Answer: B** — AutoGen is a better fit when the value genuinely comes from iterative, open-ended dialogue; CrewAI is a better fit when the division of labor is knowable in advance.
 `,
 
   "revision-notes": `
-AutoGen is Microsoft's open-source, research-originated, CONVERSATION-CENTRIC multi-agent framework — rather than an explicit graph (**LangGraph**) or a role/task/crew hierarchy (**CrewAI**) or lightweight handoffs (**OpenAI Agents SDK**), AutoGen models multi-agent collaboration as a structured CONVERSATION between message-passing CONVERSABLE AGENTS. Its most influential pattern pairs an ASSISTANTAGENT (proposing responses/code) with a USERPROXYAGENT (executing code or representing human feedback) — directly implementing **Agent Fundamentals**' plan-act-observe loop as an explicit, TWO-PARTICIPANT conversation, with code execution treated as a first-class capability distinguishing AutoGen's practical emphasis.
+**Core model in 4 lines:** Every AutoGen participant is, underneath, a ConversableAgent that sends/receives messages and generates replies via pluggable logic. AssistantAgent specializes it as an LLM-backed reasoner that proposes solutions (including code) but never executes anything; UserProxyAgent specializes it as a human/executor stand-in that can run proposed code (ideally sandboxed) and relay real or simulated human input. For more than two participants, GroupChat plus a GroupChatManager coordinates turn-taking via a configurable speaker-selection method. Underneath, every agent's individual turn is the same single-agent generate-a-reply step covered in Agent Fundamentals — a conversation is a coordination layer, not a different execution primitive.
 
-A critical, frequently-tested concept is HUMAN_INPUT_MODE, which directly, concretely implements **Agent Fundamentals**' autonomy-level spectrum: \`"NEVER"\` (fully autonomous), \`"ALWAYS"\` (fully human-supervised — human input required at EVERY turn), and \`"TERMINATE"\` (a middle-ground tier requesting human input only when the conversation would otherwise conclude) — this should be chosen DELIBERATELY per the genuine stakes of the specific action/context, not applied uniformly, directly echoing the per-action tiered-autonomy principle established across **Agent Fundamentals**, **LangGraph**, and **CrewAI**.
+**Termination and safety in 4 lines:** Every conversation needs an explicit stopping mechanism — a termination-phrase check (is_termination_msg) paired with a hard numeric ceiling (max_consecutive_auto_reply, max_round), never the phrase alone, since an LLM can fail to emit it reliably. Code execution should always run in a fully isolated, timeout-bounded sandbox (Docker-backed), never unsandboxed, since LLM-generated code is untrusted input. Human-in-the-loop is a configurable spectrum (human_input_mode) that should be treated as a real security/quality control point, not a rate-limiting convenience.
 
-GROUPCHAT coordinates conversation among more than two agents, with a GROUPCHATMANAGER determining the next speaker at each turn (by default, via its own LLM-driven reasoning, though CUSTOM SPEAKER-SELECTION LOGIC can impose more deterministic, predictable turn-order control when a workflow genuinely benefits from it) — a genuinely distinct coordination mechanism from CrewAI's role/task/crew structure or LangGraph's explicit conditional edges.
+**Failure modes in 3 lines:** Conversations that loop without terminating are usually caused by fragile phrase-matching with no numeric backstop — fix with a robust check plus a hard ceiling. Agents agreeing without real progress happens when critique is purely subjective LLM-to-LLM judgment — fix by giving a critic agent an external, objective rubric or test suite. Cost blowup from long GroupChats comes from multiplying agents, rounds, and (under "auto" selection) speaker-selection calls — default to the smallest roster and the most constrained selection method the task allows.
 
-Since AutoGen's distinguishing strength involves AUTOMATED CODE EXECUTION, CODE-EXECUTION SAFETY is a particularly important, frequently-tested concern: automated execution of model-generated code MUST be SANDBOXED (e.g., via Docker) in production, directly extending **Agent Fundamentals**' and **Guardrails**' action-level constraint guidance to this specific, high-risk capability — and sandboxing the execution ENVIRONMENT alone doesn't automatically restrict network access; that requires explicit, additional configuration.
+**Production and ecosystem in 4 lines:** Log full transcripts and per-conversation cost/turn-count; test outcome properties and structural wiring, never exact transcript text; treat conversations as non-transactional, since earlier turns (and their cost, and any code they ran) may have already happened before a later turn fails. Compared to alternatives: CrewAI offers a more declarative, predictable task-based model when the division of labor is known; LangGraph offers precise, hand-wired control over branching and state; the OpenAI Agents SDK offers a lighter-weight alternative. AutoGen's own architecture split into Core, AgentChat, and Extensions (with a parallel community fork, AG2), reflecting the same tension every multi-agent framework eventually faces between flexible emergent behavior and predictable, bounded execution.
 
-AutoGen directly inherits **Agent Fundamentals**' LOOP-SAFETY guidance, but applied at TWO distinct granularities: \`max_round\` bounds an entire GroupChat's TOTAL conversational turns (guarding against an unproductive, never-converging group discussion), while \`max_consecutive_auto_reply\` bounds how many times ONE SPECIFIC agent can reply in succession without external intervention (guarding against a single agent's own unproductive self-correction loop) — a genuinely robust system sets BOTH bounds, since either alone leaves a distinct runaway-execution risk unaddressed.
-
-AutoGen also directly inherits **Agent Fundamentals**' COMPOUNDING HALLUCINATION RISK concept, manifesting as an earlier agent's incorrect claim becoming part of the shared conversation history later agents build upon without any inherent mechanism to recognize the flaw — the mitigation, directly analogous to **CrewAI**'s own verification-task pattern, is introducing a dedicated verifier/fact-checking agent (or conversational turn) that reviews earlier claims BEFORE the conversation proceeds to a stage where other agents build significant further work on top of them.
-
-A genuinely important architectural comparison, frequently tested: AutoGen's conversational model is more FLEXIBLE but LESS structurally explicit/deterministic than **LangGraph**'s graph model by default, and distinctly CONVERSATION-centric (message exchange, emergent flow) rather than **CrewAI**'s TEAM/ROLE-centric framing (explicit role/goal/backstory, task delegation) — AutoGen's particular strength lies in workflows genuinely resembling a natural, back-and-forth dialogue, especially code-generation-execution-feedback loops.
-
-A senior AI engineer chooses the appropriate conversational pattern (simple pairing vs. GroupChat) matched to genuine collaboration needs, always sandboxes code execution, bounds both conversation-level and individual-agent-level iteration counts, chooses human_input_mode deliberately per genuine action stakes, and designs a clear, explicit termination condition — this foundational understanding, completing the platform's five core agent-framework skills (**Agent Fundamentals**, **LangChain**, **LangGraph**, **CrewAI**, **OpenAI Agents SDK**, and this page), directly sets up the remaining, capability-focused skills covered throughout the rest of this category: **Agent Memory**, **Planning**, **Reflection**, **Tool Calling**, and **MCP**.
+**The one discipline that matters most:** never adopt conversation-driven orchestration on pattern-popularity alone — justify it with a golden-set comparison against a fixed-pipeline or single-agent baseline, because the coordination risk (non-termination, agreement without progress, multiplied LLM cost) is real and consistently underestimated relative to the perceived benefit of "letting agents figure it out together."
 `,
 
   "learning-roadmap": `
-**Week 1 — Core conversational pattern**: building a bounded, sandboxed assistant/user-proxy code-generation loop. Milestone: complete Lab 1, with a working, tested code-generation-execution loop.
+A realistic path to production-level AutoGen fluency:
 
-**Week 2 — GroupChat coordination**: building a GroupChat with custom, deterministic speaker-selection logic. Milestone: complete Lab 2, with a documented, predictable turn order.
+**Week 1 — Foundations.** Beginner Concepts + Lab 1. Build your first two-agent (assistant/user-proxy) coding conversation with sandboxed execution and inspect its raw, non-deterministic transcript across several runs. Milestone: you can explain how a message flows from proposal, to sandboxed execution, to the assistant's next reply.
 
-**Week 3 — Tiered autonomy**: implementing a human-approval checkpoint for a genuinely high-stakes action within an otherwise autonomous workflow. Milestone: complete Lab 3, with a verified tiered-autonomy system.
+**Week 2 — The honest cost/benefit question.** Intermediate Concepts + Lab 2. Implement the same iterative coding task as an AutoGen conversation and as a fixed, no-feedback-loop pipeline, and measure correctness, tokens, and latency for both. Milestone: you have real numbers, not a feeling, for whether the conversational model was worth it for your specific task.
 
-**Week 4 — Compounding-error mitigation**: building a verified multi-agent conversation with a dedicated fact-checking agent. Milestone: complete Lab 4, demonstrating the verifier catching an intentional error.
+**Week 3 — Failure modes and objective verification.** Advanced Concepts + Lab 3. Deliberately reproduce the "agents agreeing too easily" failure with a subjective critic, then fix it with an objective test-suite-based check. Milestone: you can diagnose and fix a coordination bug that would otherwise silently ship a wrong answer.
 
-Next platform skill once this roadmap is complete: **Agent Memory**, covering short-term, long-term, and episodic memory patterns applicable across all the frameworks covered in this category.
+**Week 4 — Internals and GroupChat.** Internal Working, Architecture, Data Flow, and the GroupChat/speaker-transition sections of Advanced Concepts. Rebuild your two-agent conversation as a constrained three-agent GroupChat with explicit allowed transitions. Milestone: you can explain, from memory, exactly what happens between initiate_chat and the final ChatResult, for both two-agent and GroupChat conversations.
+
+**Week 5 — Production.** Production Usage through Deployment sections; Lab 4. Ship a containerized conversation service with async execution for long-running paths, termination guardrails, structured logging, and health checks, with the sandbox running as a separate isolated container. Milestone: a working, guardrailed, evaluated AutoGen service on your GitHub.
+
+**Week 6 — Ecosystem and judgment.** Read the Comparisons section closely against the CrewAI and LangGraph skills. Milestone: you can justify, out loud and with evidence, when you'd choose AutoGen, CrewAI, LangGraph, or a single agent for a given new problem.
+
+Then continue to the **CrewAI** skill for the role-based, task-declarative alternative, or the **LangGraph** skill for explicit graph-based control flow, to round out the multi-agent orchestration landscape this page situates AutoGen within.
 `,
 
   "official-docs": `
-- **Microsoft's official AutoGen documentation** — the authoritative, actively-maintained reference for ConversableAgent, GroupChat, and the AgentChat architecture.
-- **AutoGen Studio's official documentation** — the lower-code interface for building and testing AutoGen systems.
+- [Microsoft AutoGen documentation](https://microsoft.github.io/autogen/) — the primary reference for ConversableAgent, AssistantAgent, UserProxyAgent, GroupChat, and the layered Core/AgentChat/Extensions architecture; check this before trusting any tutorial's specific class names or import paths, given how substantially the framework's structure has changed.
+- [Microsoft AutoGen GitHub repository](https://github.com/microsoft/autogen) — release notes and the examples/ directory are often the most current source of truth for API usage, especially across the 0.4 rearchitecture.
+- [AG2 documentation and repository](https://github.com/ag2ai/ag2) — the community-maintained fork's own docs; check which project (AutoGen or AG2) a given tutorial or dependency actually targets before assuming API compatibility.
+- [AutoGen founding paper](https://arxiv.org/abs/2308.08155) — "AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation" (Wu et al., 2023), the original formalization of the conversation-driven multi-agent model.
 `,
 
   books: `
-- Given AutoGen's origins as a research project with continued active evolution, official documentation and Microsoft Research publications remain the most current, authoritative references over dedicated book-length treatments.
+- There is no single widely recognized, edition-stable book dedicated specifically to AutoGen as of the author's knowledge cutoff — the framework has changed architecture substantially (the 0.4 rearchitecture, the AG2 fork) fast enough that book-length treatments age quickly; the official documentation and GitHub examples are the more reliable primary source.
+- Recent general titles on **multi-agent LLM system design** covering conversation-driven and role-based patterns side by side are emerging; verify a specific title's publication date against how current you need the framework-specific details to be, especially anything predating the 0.4 rearchitecture.
+- **Designing Machine Learning Systems** — Chip Huyen. Not AutoGen-specific, but the strongest general treatment of the production-ML-system thinking (evaluation, monitoring, cost accounting) that transfers directly to production multi-agent conversational systems.
+- For the underlying single-agent and reflection concepts AutoGen composes, see the **books** listed on the **Agent Fundamentals** and **Reflection** skill pages — those foundations age much more slowly than any specific framework's API.
 `,
 
   blogs: `
-- **Microsoft Research's official blog** — design-philosophy discussions and release notes on AutoGen's evolution directly from the originating research team.
-- **Community tutorials on building AutoGen-based coding assistants and multi-agent GroupChats** widely available across AI engineering educational content providers.
+- **Microsoft Research and the AutoGen team's own blog/documentation updates** — the most reliable source for framework-specific patterns and the rationale behind the 0.4 rearchitecture, maintained by the team that ships the code.
+- **AG2's own community blog/documentation** — worth reading specifically for contrast with mainline AutoGen, since the fork has continued to evolve independently.
+- **CrewAI's and LangChain/LangGraph's own blogs** — worth reading specifically for contrast, since they articulate philosophically different (declarative task-based, and explicit graph-first, respectively) approaches to the same underlying multi-agent coordination problem AutoGen solves conversationally.
+- General AI-engineering newsletters/blogs (see the **Agent Fundamentals** and **Planning** skill pages' blog lists) frequently cover multi-agent coordination patterns and failure modes even when not naming AutoGen explicitly.
 `,
 
   "research-papers": `
-- **Wu, Q. et al. — "AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation"** — the foundational paper introducing AutoGen's conversational multi-agent design.
-- **Yao, S. et al. — "ReAct: Synergizing Reasoning and Acting in Language Models"** — the foundational agent-loop pattern AutoGen's conversational model concretely implements, covered in **Agent Fundamentals**.
+- **"AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation"** (Wu et al., 2023) — the foundational paper formalizing ConversableAgent, multi-agent conversation, and code-execution-centric workflows; the essential starting point for this skill.
+- **"ReAct: Synergizing Reasoning and Acting in Language Models"** (Yao et al., 2022) — the foundational reasoning-acting loop underlying every individual AutoGen agent's own execution turn, covered in depth in the Agent Fundamentals skill.
+- **"Reflexion: Language Agents with Verbal Reinforcement Learning"** (Shinn et al., 2023) — closely related to AutoGen's critic/producer conversational pattern, and directly relevant background for understanding why self- or peer-critique needs grounding (external verification) to reliably improve outcomes, covered in depth in the Reflection skill.
+- **"Generative Agents: Interactive Simulacra of Human Behavior"** (Park et al., 2023) — early, influential work on giving LLM agents persistent identity/role framing and observing emergent multi-agent social behavior, conceptually adjacent to AutoGen's conversational agents.
+- **"Communicative Agents for Software Development"** (the CAMEL / role-playing multi-agent line of work, Li et al., 2023) — closely related conversational multi-agent research, worth reading alongside the AutoGen paper for a broader view of the conversation-driven design space.
+- For task decomposition and planning theory more broadly, see the foundational reading list on the **Planning** skill page rather than AutoGen-specific sources, since the underlying coordination theory predates and is broader than any one framework's implementation.
 `,
 
   videos: `
-- **Microsoft Research's conference talks and tutorials** on AutoGen's design and usage.
-- **Community-produced tutorials on building assistant/user-proxy code-generation loops and multi-agent GroupChats.**
+- **AutoGen team talks and demos from Microsoft Research** (various conference and community appearances) — the creators explaining design rationale directly, including the motivation behind the 0.4 Core/AgentChat rearchitecture.
+- **AG2 community talks and documentation walkthroughs** — useful for understanding how the fork's philosophy and roadmap have diverged from mainline AutoGen since the split.
+- **Comparative multi-agent framework talks** from AI Engineer Summit and similar conferences, where AutoGen, CrewAI, and LangGraph are discussed side by side — directly useful for internalizing the Comparisons section's tradeoffs from multiple practitioners' perspectives.
+- **DeepLearning.AI's multi-agent short courses** (various, including material built around AutoGen) — structured walkthroughs of conversational agent design and common pitfalls.
+- Caution: given the framework's substantial architectural change (the 0.4 rearchitecture and the AG2 fork), prefer videos dated within the last year or so, and verify specific code shown still matches current imports/class names and which project (AutoGen or AG2) it targets before copying it.
 `,
 
   "github-repos": `
-- **microsoft/autogen** — the official, primary AutoGen repository.
-- **microsoft/autogen** (AutoGen Studio subdirectory/related tooling) — the lower-code interface project.
+- [microsoft/autogen](https://github.com/microsoft/autogen) — the main repository; the examples/ and docs/ directories are often the most current source of truth for AssistantAgent/UserProxyAgent/GroupChat usage across the 0.4 architecture.
+- [ag2ai/ag2](https://github.com/ag2ai/ag2) — the community-maintained fork; useful to browse alongside mainline AutoGen to understand where the two have diverged.
+- [microsoft/magentic-one (or its successor documentation)](https://github.com/microsoft) — Microsoft's general-purpose multi-agent system built on AutoGen's Core runtime, a useful reference for a production-grade system built on the framework's lower-level layer.
+- [crewAIInc/crewAI](https://github.com/crewAIInc/crewAI) — worth browsing specifically to contrast its declarative task-based approach with AutoGen's conversational model, for the Comparisons section.
+- [langchain-ai/langgraph](https://github.com/langchain-ai/langgraph) — the explicit graph/state-machine alternative, useful to read side by side with AutoGen's emergent conversational model.
+- [openai/openai-agents-python](https://github.com/openai/openai-agents-python) — the OpenAI Agents SDK, useful as a lightweight-abstraction contrast point.
 `,
 
   "practice-problems": `
-Ordered by skill focus:
+**Ordered by skill focus:**
 
-1. **Conversational pattern selection**: given a described multi-agent task, decide whether a simple pairing or a GroupChat is more appropriate.
-2. **Autonomy calibration**: given a described workflow with mixed-risk actions, decide the appropriate human_input_mode for each participant.
-3. **Speaker-selection design**: given a described GroupChat workflow, design custom, deterministic speaker-selection logic where appropriate.
-4. **Compounding-error diagnosis**: given a described conversation producing an inconsistent outcome, identify where a verifier agent should be introduced.
-5. **External practice sets**: AutoGen's own official notebooks and example repositories for hands-on practice across assistant/user-proxy pairs and GroupChat.
+1. *ConversableAgent fluency*: build a bare ConversableAgent (not AssistantAgent/UserProxyAgent) and configure its reply logic manually with a custom function, to understand what the specialized classes actually add on top of the base class.
+2. *Termination fluency*: write three different is_termination_msg functions of increasing robustness (exact match, case-insensitive substring, a check that also verifies the executor's last reported exit code was zero) and compare how often each correctly detects a genuinely complete conversation.
+3. *Sandboxing fluency*: configure a Docker-backed executor with a restrictive timeout and a minimal base image, then deliberately submit a slow or infinite-looping generated snippet and confirm the timeout actually fires.
+4. *Speaker-selection fluency*: implement the same three-agent task once with speaker_selection_method="auto" and once with explicit allowed_or_disallowed_speaker_transitions; compare cost, latency, and whether the conversation's actual speaking order differs meaningfully.
+5. *Critic verification fluency*: reproduce the "agents agreeing too easily" failure with a subjective critic on a deliberately flawed solution, then fix it with an objective test-suite-based check (Coding Question 3), and quantify the improvement in bug-catch rate.
+6. *Loop detection*: build the near-duplicate-message detector from Coding Question 2 and validate it against both a genuinely looping conversation and a genuinely long-but-productive one, tuning the similarity threshold to minimize false positives.
+7. *Fixed pipeline vs conversation*: for any of the above tasks, build the fixed-pipeline equivalent (no feedback loop) and run both against a 15-20 item golden set, reporting correctness, token cost, and latency for each — this is the exercise this page argues you should run before shipping any conversation-driven design in practice.
+8. *Nested chats*: implement a main conversation that, mid-way, spins off a nested sub-conversation with a different, narrower agent roster for a specialist sub-task, and folds the result back into the main conversation as a single reply.
+
+External sets: multi-agent benchmark tasks and collaborative code-generation benchmarks from the broader agent-research literature; any dataset with a golden-answer set (coding problems with known test suites are especially well-suited) repurposed as a quality baseline for comparing conversation-driven versus fixed-pipeline approaches.
 `,
 
   "architecture-diagram": `
+The reference production architecture for an AutoGen-based service — the shape most real deployments converge on once they move past a single, open-ended, unconstrained GroupChat:
+
 ~~~mermaid
 flowchart TB
-    subgraph CoreModel["AutoGen Core Model"]
-        ConversableAgent["ConversableAgent (base)"]
-        Assistant["AssistantAgent"]
-        UserProxy["UserProxyAgent"]
+    Client["Client app"] --> LB["Load balancer"]
+    LB --> API["API layer (sync for short two-agent\nconversations, async job queue for\nlong/GroupChat/human-in-the-loop ones)"]
+
+    subgraph Convo["Constrained conversation"]
+        UP["UserProxyAgent\n(execution gate, termination check)"]
+        Coder["AssistantAgent: Coder"]
+        Critic["AssistantAgent: Critic\n(objective test-suite check)"]
     end
-    subgraph GroupChatLayer["Multi-Participant Coordination"]
-        GroupChat["GroupChat"]
-        Manager["GroupChatManager"]
+    API --> UP
+    UP --> Coder
+    Coder --> Critic
+    Critic -->|LGTM or feedback| UP
+
+    UP -->|extract + run| Sandbox["Isolated code-execution sandbox\n(separate Docker container, timeout)"]
+    Sandbox -->|result| UP
+
+    Convo --> API
+    API --> Client
+
+    subgraph Obs["Observability"]
+        Logs["Structured logs\n(full transcript, per-turn tokens/latency)"]
+        Metrics["Round count, clean-termination rate,\ncost per conversation"]
+        EvalJob["Golden-set eval job\n(conversation vs fixed-pipeline baseline)"]
     end
-    subgraph Safety["Safety"]
-        Sandbox["Docker Sandboxing"]
-        Bounds["max_round / max_consecutive_auto_reply"]
-        HumanInput["human_input_mode tiers"]
-    end
-    ConversableAgent --> Assistant
-    ConversableAgent --> UserProxy
-    Assistant --> GroupChat
-    UserProxy --> GroupChat
-    GroupChat --> Manager
-    CoreModel --> Safety
+    Convo -.-> Obs
 ~~~
+
+Every box maps to a section on this page: the constrained conversation roster to Architecture and Best Practices, the isolated sandbox to Security and Deployment, the sync/async API split to Deployment, and the Observability subgraph to Monitoring and Testing.
 `,
 
   "mind-map": `
-~~~mindmap
+~~~mermaid
+mindmap
   root((AutoGen))
-    Foundations
-      Overview
-      History Microsoft Research
-      Why it exists
-      Problem it solves
-    Core Abstractions
+    Core primitives
       ConversableAgent
-      AssistantAgent
-      UserProxyAgent
-    Assistant User Proxy Pattern
-      Code generation
-      Sandboxed execution
-      Feedback loop
-    GroupChat
-      Manager
+      AssistantAgent (LLM reasoner)
+      UserProxyAgent (human/executor)
+      GroupChat + GroupChatManager
+      Nested chats
+    Coordination
+      Shared message history
+      Termination (phrase + numeric ceiling)
       Speaker selection
-      Custom deterministic logic
-    Autonomy
-      human_input_mode tiers
-      Per action calibration
-    Safety
-      Code execution sandboxing
-      Bounded rounds and replies
-      Compounding error verification
-    Comparison
-      Vs LangGraph determinism
-      Vs CrewAI role metaphor
-    Practice
-      Interview questions
-      Coding problems
-      Hands-on labs
-      Real projects
+        auto (LLM-driven)
+        round_robin
+        allowed/disallowed transitions
+      Custom reply functions (register_reply)
+    Code execution
+      Sandboxed executor (Docker, timeout)
+      Propose vs execute separation
+      Human-in-the-loop (human_input_mode)
+    Failure modes
+      Non-terminating conversations
+      Agents agreeing without progress
+      Cost blowup from long GroupChats
+      Non-transactional partial failure
+    Internals
+      generate_reply per turn
+      Speaker-selection LLM call (GroupChat)
+      ChatResult: history + summary + cost
+    Architecture evolution
+      Original single-layer ConversableAgent
+      0.4 rearchitecture: Core / AgentChat / Extensions
+      AG2 community fork
+      Magentic-One (built on Core)
+    Production
+      Timeouts (LLM + sandbox)
+      Async execution for long conversations
+      Per-turn cost/latency tracking
+      Security: sandboxing, injection propagation
+      Testing: outcome-based, never exact transcript
+    Ecosystem
+      Agent Fundamentals
+      Tool Calling
+      Reflection
+      Planning
+      CrewAI (task/role-based)
+      LangGraph (explicit graph control)
+      OpenAI Agents SDK (lightweight alternative)
+    Judgment
+      Conversation vs fixed pipeline tradeoff
+      Measure before adopting conversational orchestration
+      Objective verification beats subjective critique
 ~~~
 `,
 };

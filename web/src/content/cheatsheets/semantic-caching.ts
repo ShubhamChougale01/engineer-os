@@ -1,0 +1,100 @@
+import type { CheatSheetData } from "./types";
+
+const semanticCaching: CheatSheetData = {
+  title: "The Ultimate Semantic Caching Cheat Sheet",
+  subtitle: "Meaning-based cache lookups · thresholds · tiered caching · production toolbelt",
+  sections: [
+    {
+      title: "Core Concepts",
+      color: "violet",
+      rows: [
+        { term: "Semantic caching", desc: "Cache LLM responses keyed by meaning, not exact text", code: "embed(query) -> nearest past query\nif similar enough: return cached answer" },
+        { term: "Exact-match caching", desc: "Hash the literal prompt string as the key", code: "key = sha256(normalize(prompt))\ncache[key] -> answer  # misses paraphrases" },
+        { term: "Embedding", desc: "Vector representation of text meaning", code: "vec = embed_model.embed('capital of France?')\n# len(vec) == model dimension, e.g. 384/1536" },
+        { term: "Cosine similarity", desc: "Angle-based closeness of two vectors, 1.0 = identical direction", code: "sim = dot(a, b) / (norm(a) * norm(b))\n# 0.95+ usually very similar meaning" },
+        { term: "Similarity threshold", desc: "Cutoff score deciding hit vs miss", code: "if top_score >= threshold:\n    return cached_answer\nelse:\n    call_llm()" },
+        { term: "ANN search", desc: "Approximate nearest neighbor — fast lookup at scale", code: "HNSW / IVF indexes trade small recall\nloss for sub-linear search time" },
+        { term: "Cache hit / miss", desc: "Found vs not-found a similar-enough past query", code: "hit: skip LLM call entirely\nmiss: pay full generation cost once" },
+        { term: "Staleness", desc: "Cached answer becomes wrong as data/model changes", code: "TTL expiry + invalidation events\nkeep cached answers fresh" },
+        { term: "Tiered cache", desc: "Exact match first, semantic fallback second, LLM last", code: "1. exact match (free, zero risk)\n2. semantic match (cheap, small risk)\n3. LLM call (slow, always current)" },
+        { term: "False positive (wrong hit)", desc: "Cache confidently returns an incorrect answer", code: "threshold too loose ->\nunrelated queries match each other" },
+        { term: "False negative (missed hit)", desc: "A genuine paraphrase fails to match", code: "threshold too tight ->\ncache rarely fires, low ROI" },
+        { term: "Context Engineering (sibling)", desc: "Broader discipline: managing what's in the context window", code: "KV-cache/prompt caching speeds up ONE call\nsemantic caching skips the call entirely" },
+      ],
+    },
+    {
+      title: "Cache Building Blocks",
+      color: "blue",
+      rows: [
+        { term: "Embedding model choice", desc: "Small, fast, cheap — runs on every query including misses", code: "cache lookup model != main RAG\nembedding model (can be smaller)" },
+        { term: "Vector store choice", desc: "FAISS (library) vs Pinecone/Qdrant (managed) vs Redis (existing infra)", code: "FAISS: no server, DIY persistence\nPinecone/Qdrant: managed, namespaces\nRedis: reuse existing ops footprint" },
+        { term: "Normalization", desc: "Lowercase, trim, strip punctuation before embedding", code: "def normalize(t):\n    return ' '.join(t.lower().strip().split())" },
+        { term: "L2 normalization", desc: "Required so inner product == cosine similarity", code: "vec = vec / (norm(vec) + 1e-10)\n# skipping this silently breaks thresholds" },
+        { term: "TTL (time-to-live)", desc: "Expire an entry after N seconds regardless of use", code: "entry.expires_at = now + ttl_seconds\nif now >= entry.expires_at: miss" },
+        { term: "Eviction policy", desc: "What to remove when the cache is full", code: "LRU: evict least recently used\nLFU: evict least frequently used\n(LFU often fits FAQ-style traffic better)" },
+        { term: "Per-query-class threshold", desc: "Tune tighter where a wrong answer costs more", code: "THRESHOLDS = {\n  'store_hours': 0.85,\n  'pricing': 0.92,\n  'medical_legal': 1.01,  # never hit\n}" },
+        { term: "Index dimension", desc: "Must match the embedding model's output size exactly", code: "faiss.IndexFlatIP(dim)\n# dimension mismatch -> silent garbage scores" },
+        { term: "Embedding-model versioning", desc: "Old vectors are incomparable to new-model vectors", code: "cache_key_prefix = f'embed_v{MODEL_VERSION}'\n# swap model -> full re-embed required" },
+      ],
+    },
+    {
+      title: "Everyday Idioms",
+      color: "emerald",
+      rows: [
+        { term: "Minimal lookup", desc: "The whole mechanism in a few lines", code: "vec = embed(question)\nscore, ans = index.search(vec, k=1)\nreturn ans if score >= threshold else None" },
+        { term: "Tiered ask()", desc: "Check exact tier, then semantic tier, then LLM", code: "if key in exact_cache: return exact_cache[key]\nhit = semantic_cache.get(embed(q))\nreturn hit or llm_call(q)" },
+        { term: "Write-through on miss", desc: "Store both hash and embedding after a fresh answer", code: "answer = llm_call(q)\nexact_cache[hash(q)] = answer\nsemantic_cache.put(embed(q), answer)" },
+        { term: "FAISS exact index", desc: "IndexFlatIP for small/prototype scale", code: "index = faiss.IndexFlatIP(dim)\nindex.add(normalize(vec).reshape(1, -1))" },
+        { term: "FAISS ANN index", desc: "HNSW for large-scale, sub-linear lookup", code: "index = faiss.IndexHNSWFlat(dim, 32)\nindex.hnsw.efSearch = 64" },
+        { term: "Redis vector query", desc: "KNN search via RediSearch", code: "Query('*=>[KNN 1 @embedding $vec AS score]')\n  .sort_by('score').dialect(2)" },
+        { term: "Graceful fallback", desc: "Cache backend down -> call LLM directly, never fail", code: "try:\n    hit = semantic_cache.get(vec)\nexcept ConnectionError:\n    hit = None  # fall through to llm_call" },
+        { term: "Score logging", desc: "Always log the raw score, hit or miss", code: "logger.debug('score=%.4f threshold=%.4f hit=%s',\n  score, threshold, score >= threshold)" },
+      ],
+    },
+    {
+      title: "Power Features",
+      color: "amber",
+      rows: [
+        { term: "Tiered exact + semantic", desc: "Cheapest, safest check before the riskier one", code: "exact match: hash lookup, zero risk\nsemantic match: embedding call, small risk" },
+        { term: "Threshold sweep tuning", desc: "Pick a threshold from labeled should/shouldn't-match pairs", code: "for t in candidates:\n    score = evaluate(pairs, t)\n# penalize false positives harder than misses" },
+        { term: "Per-tenant namespacing", desc: "Isolate cache entries in multi-tenant systems", code: "index.search(vec, namespace=tenant_id)\n# or prefix Redis keys with tenant_id" },
+        { term: "Safety check before write", desc: "Moderate the response before it's persisted", code: "answer = llm_call(q)\nsafe = moderate(answer)\nif is_safe(safe): cache.put(vec, safe)" },
+        { term: "Event-driven invalidation", desc: "Purge cache entries when source data changes", code: "on_policy_update():\n    cache.invalidate(prefix='policy_')" },
+        { term: "Manual purge", desc: "Operator tool to remove a bad entry immediately", code: "cache.delete(entry_id)\n# don't wait out the TTL for a known-bad hit" },
+        { term: "Hit-rate instrumentation", desc: "Tie cache wins directly to cost and latency saved", code: "LLM_CALLS_AVOIDED.inc()\n# hit_rate * avg_token_cost = $ saved" },
+      ],
+    },
+    {
+      title: "Pitfalls & Gotchas",
+      color: "rose",
+      rows: [
+        { term: "Negation blind spot", desc: "'X covered?' and 'X NOT covered?' can embed close together", code: "cache.put('warranty covers water damage?', 'Yes')\ncache.get('warranty NOT cover water damage?')\n# risk: may wrongly return 'Yes'" },
+        { term: "Caching personalized data", desc: "Never share account-specific answers across users", code: "# WRONG: 'what's my balance' cached globally\n# RIGHT: skip cache, or scope strictly per-user" },
+        { term: "Stale cached facts", desc: "No TTL means wrong answers persist indefinitely", code: "# always set a TTL, matched to how often\n# the underlying data actually changes" },
+        { term: "Embedding-model drift", desc: "Swapping models without invalidating breaks all scores", code: "# WRONG: keep old vectors, change embed model\n# RIGHT: full wipe + re-embed on model change" },
+        { term: "Cache poisoning", desc: "A jailbroken response gets cached, served to others", code: "# moderate on WRITE path, not just on the\n# original response's return path" },
+        { term: "Cross-tenant leakage", desc: "One tenant's cached answer served to another", code: "# missing namespace/tenant scoping on cache keys\n# is a data-isolation bug, not just a quality bug" },
+        { term: "One global threshold", desc: "Same cutoff for 'store hours' and 'medical dosage'", code: "# WRONG: THRESHOLD = 0.85 everywhere\n# RIGHT: per-query-class threshold policy" },
+        { term: "No fallback on outage", desc: "Cache backend down takes the whole request down", code: "# cache must be an optimization,\n# never a hard dependency for correctness" },
+        { term: "Aggregate hit rate only", desc: "Hides a nonzero wrong-hit rate behind a good headline number", code: "# also sample served hits for human/LLM-judge\n# review -- a separate 'wrong_hit_rate' metric" },
+        { term: "Caching creative output", desc: "Defeats the purpose of asking for something new", code: "# 'write me a poem' should never hit a cache --\n# route creative/open-ended queries around it" },
+      ],
+    },
+    {
+      title: "Production Toolbelt",
+      color: "cyan",
+      rows: [
+        { term: "GPTCache", desc: "Purpose-built OSS semantic caching library (Zilliz)", code: "from gptcache import cache\ncache.init()  # pluggable embed + vector backends" },
+        { term: "Redis + RediSearch", desc: "Vector similarity search on infra you may already run", code: "FT.CREATE idx SCHEMA embedding VECTOR HNSW 6\n  TYPE FLOAT32 DIM 384 DISTANCE_METRIC COSINE" },
+        { term: "LangChain / LangGraph cache", desc: "Framework-level cache wrappers around GPTCache/Redis", code: "from langchain.cache import RedisSemanticCache\nset_llm_cache(RedisSemanticCache(...))" },
+        { term: "FAISS / Pinecone / Qdrant", desc: "Vector index backends usable as the semantic tier", code: "faiss.IndexHNSWFlat(dim, 32)      # self-hosted\npinecone.Index('cache')            # managed" },
+        { term: "Momento", desc: "Managed/serverless cache platform option", code: "# check current docs/pricing --\n# verify before committing to any vendor" },
+        { term: "Monitoring stack", desc: "Prometheus counters + histograms for hit rate", code: "CACHE_LOOKUPS.labels(tier, result).inc()\nCACHE_SCORE.observe(top_score)" },
+        { term: "AI Evals tie-in", desc: "Cache correctness belongs in your evals suite", code: "sample served hits ->\nhuman/LLM-judge review -> wrong_hit_rate" },
+        { term: "AI Red Teaming tie-in", desc: "Test cache poisoning and cross-tenant leakage explicitly", code: "attempt: jailbreak -> cache write -> retrieve\nvia a similar benign-looking query" },
+      ],
+    },
+  ],
+};
+
+export default semanticCaching;

@@ -1,958 +1,1242 @@
 import type { SkillContent } from "../types";
 
+/**
+ * LangChain — full 50-section knowledge page.
+ * Note: code blocks use ~~~ fences (CommonMark-equivalent to backtick fences)
+ * so this file needs no backtick escaping inside the template literals.
+ */
 const langchain: SkillContent = {
   overview: `
-LangChain is the most widely-adopted open-source framework for building LLM-powered applications, providing reusable, composable abstractions for exactly the concepts covered in the platform's **Agent Fundamentals** skill: chains (composed sequences of LLM calls and transformations), agents (the plan-act-observe loop wrapped in a concrete, usable API), tool integration (structured, standardized tool-calling interfaces), memory (short-term conversation state), and retrieval (directly connecting to the platform's **Vector Search** skill for RAG-style applications).
+LangChain is a framework for composing large language model calls into applications: prompt templates, chains of steps, retrievers, memory, and agents that can call tools. It was the framework that turned "call an LLM API" into "build an LLM application" for a huge fraction of the industry — when people in 2023 said "I'm building with LLMs," a large share of them meant "I'm gluing things together with LangChain." It ships in two actively maintained flavors, a Python package and a JavaScript/TypeScript package, with broadly parallel (but not identical) APIs.
 
-Where **Agent Fundamentals** established the conceptual vocabulary (the agent loop, autonomy levels, tool use), LangChain is the concrete, production-grade toolkit most engineers reach for first to actually IMPLEMENT these concepts, rather than hand-rolling the agent loop, prompt templating, and tool-calling plumbing from scratch. LangChain's core value proposition is composability: its "Runnable" interface (LCEL — LangChain Expression Language) lets engineers pipe together prompt templates, model calls, output parsers, and retrieval steps using a consistent, chainable syntax, directly reducing the boilerplate otherwise required to wire an LLM application together.
+For an AI engineer, LangChain matters less because of any single clever abstraction and more because of ubiquity and surface area: it has adapters for dozens of LLM providers, vector stores, document loaders, and tool integrations, so it is frequently the fastest path to "something working end to end" during prototyping. Its core compositional idea is LCEL (LangChain Expression Language) — a pipe-based syntax (the "|" operator) for wiring a prompt template, a model, and an output parser into a single runnable object that supports streaming, batching, and async execution uniformly, without you hand-writing that plumbing for every chain.
 
-Key characteristics: **chains**, composed, reusable sequences of LLM calls and transformations; **LCEL (LangChain Expression Language)**, a declarative, pipe-based syntax for composing these chains; **agents**, LangChain's concrete implementation of the agent loop covered in **Agent Fundamentals**; **tool integration**, a large, standardized ecosystem of pre-built tool wrappers (search, code execution, APIs); and **retrievers**, directly connecting to the platform's **Vector Search** and vector database skills for RAG applications.
+Key characteristics: a large and famously fast-moving API surface (concepts and class names have been renamed, deprecated, and reorganized repeatedly across versions); a strong ecosystem gravity — LangSmith for tracing/observability and LangGraph for stateful, graph-based agent orchestration are both built by the same company and integrate tightly with LangChain primitives; a "batteries included" philosophy that trades some directness for breadth of integrations. It is one of several viable ways to build LLM applications, alongside going closer to the metal with raw provider SDKs, or using narrower-focus frameworks like LlamaIndex (data/RAG-first), PydanticAI (typed, agent-first, deliberately minimal), or DSPy (programmatic prompt/pipeline optimization). Knowing when LangChain is the right tool — and when it is unnecessary ceremony over three lines of API code — is itself a core skill covered in this page.
 `,
 
   history: `
+LangChain was created by **Harrison Chase**, released as an open-source Python package in **October 2022**, weeks before ChatGPT's public launch accelerated interest in LLM application development enormously. It arrived at the right moment: developers suddenly needed a way to chain prompts, manage context, and connect models to external data and tools, and LangChain was one of the first frameworks to name and package those patterns.
+
 | Year | Milestone |
 |------|-----------|
-| Oct 2022 | **LangChain** launches as an open-source Python library, rapidly gaining adoption as one of the very first frameworks to standardize LLM application-building patterns (prompt templates, chains, memory) |
-| 2023 | LangChain becomes the **dominant framework** for building LLM applications, rapidly expanding to support agents, an enormous ecosystem of tool integrations, and retrieval-augmented generation |
-| 2023 | **LangChain Expression Language (LCEL)** is introduced, providing a more declarative, composable, and streaming-friendly way to build chains than the earlier, more imperative chain classes |
-| 2023 | **LangSmith** (covered in its own platform skill) launches as LangChain's companion observability/debugging platform, directly addressing the genuine difficulty of tracing multi-step chain and agent execution |
-| 2024 | **LangGraph** (covered in its own subsequent platform skill) is introduced as a lower-level, graph-based orchestration layer, addressing LangChain's own chains' limitations for building genuinely stateful, cyclic agent workflows |
-| 2024–2025 | LangChain continues to mature its agent abstractions, tool-calling standardization, and integration ecosystem, while increasingly recommending LangGraph specifically for more complex, stateful agentic workflows |
+| Oct 2022 | Initial Python release — chains, prompt templates, early agents |
+| 2023 (early) | JS/TS port released; explosive community growth as ChatGPT-era interest peaked |
+| 2023 (mid) | LangChain, Inc. formed; seed and Series A funding; "agents" (ReAct-style) become a headline feature |
+| 2023 (late) | LangSmith launched — tracing, evaluation, and observability platform for LangChain (and non-LangChain) apps |
+| 2024 | Major refactor: langchain-core (interfaces), langchain (chains/agents), and langchain-community (third-party integrations) split into separate packages to control dependency bloat and versioning churn |
+| 2024 | LCEL (LangChain Expression Language) established as the recommended way to compose runnables, largely superseding the older **Chain** subclassing pattern for new code |
+| 2024 | LangGraph introduced as a lower-level, graph-based orchestration layer for stateful, cyclical agent workflows, positioned as the recommended path once agent logic outgrows a simple LCEL chain |
+| 2024-2025 | Legacy **AgentExecutor** and many chain classes marked as legacy in favor of LangGraph for anything with loops, branching, or human-in-the-loop steps |
+| 2025 | Continued consolidation around LCEL + LangGraph + LangSmith as the three pillars, with the plain "chain" abstraction increasingly a thin on-ramp rather than the end state for production agents |
 
-LangChain's history reflects the broader LLM-application-development field's own maturation — from simple, linear chain composition toward increasingly sophisticated, stateful, graph-based agent orchestration (directly setting up the platform's own next skill, **LangGraph**).
+The throughline across this history is a framework that has repeatedly reinvented its own core abstractions in response to what the community actually built with it — which is exactly why version churn is a first-class fact to internalize, not a footnote (see Latest Updates and FAQs).
 `,
 
   "why-it-exists": `
-LangChain exists because building an LLM application from scratch involves substantial repetitive plumbing: constructing prompts with variable substitution, parsing model outputs into structured data, managing conversation history/memory, integrating retrieval from a vector database (connecting to the **Vector Search** skill), and implementing the agent loop (covered in **Agent Fundamentals**) with tool-calling — much of which is genuinely common across many different applications, rather than being unique to any single one.
+Before LangChain, calling an LLM API directly was simple for a single request-response call, but real applications need more: injecting variables into prompts consistently, chaining the output of one call into the input of the next, retrieving relevant context from external data before generating an answer, remembering prior conversation turns, and letting the model decide to call external tools rather than only produce text. Every team building these patterns in late 2022 was writing similar glue code — string formatting for prompts, manual loops for multi-step reasoning, ad hoc wrappers around whichever vector store or search API they'd picked — with no shared vocabulary or reusable abstractions.
 
-LangChain solves this by providing a standardized set of reusable, composable abstractions for each of these concerns, plus a large ecosystem of pre-built integrations (LLM providers, vector stores, tools, document loaders), letting engineers assemble an LLM application from proven, tested building blocks rather than reimplementing this common plumbing from scratch for every new project.
+LangChain named these patterns (chain, prompt template, memory, retriever, agent, tool) and gave them a common interface, so that swapping one LLM provider for another, or one vector store for another, became a constructor argument change instead of a rewrite. That standardization value — a lingua franca for "LLM app pieces" plus a large directory of ready-made integrations — is the actual gap LangChain filled, more than any single technically novel idea. It let people go from "I have an OpenAI API key" to "I have a working RAG chatbot" in an afternoon of following documentation and examples, which is precisely why it grew so fast at the moment interest in LLM apps exploded.
 `,
 
   "problem-it-solves": `
-LangChain addresses the **"how do we avoid reimplementing the same LLM-application plumbing (prompting, parsing, memory, retrieval, agent loops, tool calling) from scratch for every new project"** challenge.
+LangChain removes concrete, recurring pains in building multi-step or tool-using LLM applications:
 
-Concretely, LangChain's abstractions provide:
+- **Prompt templating and reuse**: parameterized prompt templates instead of ad hoc f-strings scattered through a codebase, with partial variables, few-shot example injection, and message-role formatting handled consistently.
+- **Composition without hand-rolled plumbing**: LCEL's pipe syntax lets a prompt, model, and output parser compose into one object that automatically supports streaming, batch, and async — you do not reimplement that for every new chain.
+- **Integration sprawl**: a single, mostly consistent interface across dozens of LLM providers, vector stores, embedding models, and document loaders, so switching providers is a constructor argument change, not a rewrite.
+- **Output structuring**: output parsers (and, increasingly, model-native structured output / tool-calling APIs wrapped uniformly) turn raw text completions into typed Python objects or JSON reliably.
+- **Retrieval wiring for RAG**: retriever interfaces that plug into chains so "fetch relevant context, then answer" is a composition, not a bespoke pipeline per project — see the RAG skill for the pattern LangChain implements here.
+- **Basic conversational memory**: message history classes that persist and inject prior turns into a prompt without you managing a raw list of dicts by hand.
 
-- **Chains and LCEL**, letting engineers compose prompt templates, model calls, and output parsers into reusable, declarative pipelines, directly reducing repetitive plumbing code.
-- **A concrete, usable implementation of the agent loop** covered conceptually in **Agent Fundamentals**, including standardized tool-calling and multiple agent execution strategies.
-- **A large ecosystem of pre-built integrations** (LLM providers, vector stores directly connecting to the **Vector Search** and vector database skills, document loaders, tools), avoiding redundant integration work across projects.
-- **Memory abstractions**, managing conversation history/state across multi-turn interactions.
+What LangChain deliberately does **not** solve, or does not solve better than alternatives:
 
-What LangChain does **not** solve, or solves only partially: LangChain does not eliminate the underlying reliability challenges covered throughout the LLMs category (hallucination, prompt sensitivity) — it provides the PLUMBING for building an LLM application, not a guarantee of that application's correctness; and for genuinely complex, highly stateful, or cyclic agent workflows, LangChain's own team increasingly recommends **LangGraph** (covered in the platform's next skill) over LangChain's higher-level chain/agent abstractions.
+- **It is not a data-indexing specialist.** For deep RAG needs — many document types, multiple index structures, sophisticated chunking/reranking pipelines — LlamaIndex is narrower and more opinionated about that specific problem; LangChain's retriever interface is a thinner abstraction by comparison.
+- **It does not optimize prompts programmatically.** DSPy treats prompts as compiled artifacts it searches over; LangChain treats prompts as strings you write and iterate on manually.
+- **It is not the best answer for complex, stateful agent control flow.** Cyclical graphs, human-in-the-loop interrupts, and durable execution are LangGraph's job now, built as a lower-level complement to LangChain rather than something the original chain/AgentExecutor abstractions handle well.
+- **It does not replace understanding the underlying LLM APIs.** Debugging a LangChain application ultimately still requires understanding what request is actually being sent to the model — the abstraction can obscure this as often as it helps.
 `,
 
   "learning-objectives": `
 By the end of this page you should be able to:
 
-1. Explain LangChain's core abstractions: chains, LCEL, agents, tools, memory, and retrievers.
-2. Compose a simple chain using LCEL's pipe-based syntax.
-3. Explain how LangChain implements the agent loop covered conceptually in Agent Fundamentals.
-4. Integrate a retriever (connecting to the Vector Search skill) into a LangChain RAG pipeline.
-5. Recognize when LangChain's higher-level abstractions are sufficient versus when LangGraph's lower-level, graph-based orchestration is more appropriate.
-6. Recognize LangChain anti-patterns: over-relying on "magic" abstractions without understanding the underlying LLM calls, and using LangChain agents for workflows genuinely requiring more explicit state control.
-7. Answer senior-level interview questions on LangChain's architecture and its relationship to LangGraph.
+1. Explain what LangChain actually is (a composition and integration layer) and what it is not (a data-indexing specialist, a prompt optimizer, or a replacement for understanding raw LLM APIs).
+2. Build an LCEL chain composing a prompt template, a chat model, and an output parser, and explain why the pipe syntax gives you streaming/batch/async for free.
+3. Choose and configure a retriever for RAG use cases and compose it into a chain, understanding where LangChain's abstraction ends and where LlamaIndex-style depth begins.
+4. Use output parsers and structured-output APIs to get typed, validated data out of an LLM call instead of parsing free text yourself.
+5. Add conversational memory to a chain and explain the tradeoffs between different memory strategies (buffer, summary, windowed).
+6. Build a basic tool-calling agent with LangChain and explain when to escalate to LangGraph instead of pushing more complexity into **AgentExecutor**.
+7. Diagnose a broken chain using LangSmith traces, understanding what the framework actually sent to the model at each step.
+8. Make an honest, defensible decision about when LangChain is worth its abstraction cost versus when three lines of a raw SDK call are simply better engineering.
+9. Navigate LangChain's package structure (langchain-core, langchain, langchain-community, provider-specific packages) and know how to verify current, non-deprecated APIs instead of trusting memorized version-specific syntax.
 `,
 
   prerequisites: `
-- **Required**: **Agent Fundamentals** (the agent loop, tool use, autonomy concepts LangChain concretely implements), **Prompt Engineering** (prompt templates build directly on this), **Vector Search** and a vector database skill (for retrieval integration).
-- **Very helpful**: basic Python familiarity, since LangChain is primarily a Python (and JavaScript/TypeScript) library.
+- **Required**: comfortable Python or JavaScript/TypeScript (this page uses Python idioms primarily, since that is LangChain's more mature and widely used surface — see the **Python** skill); a working understanding of what an LLM chat completion call looks like (messages in, text or structured output out).
+- **Required conceptually**: the **Prompt Engineering** skill, since prompt templates are one of LangChain's most-used primitives and this page assumes you already know what makes a prompt effective, focusing instead on how LangChain packages and reuses them.
+- **Strongly recommended**: the **RAG** skill for the retrieval-augmented-generation pattern LangChain's retriever interface implements, and the **Tool Calling** skill for the mechanism agents use to invoke external functions — this page assumes you understand both concepts and focuses on LangChain's specific implementation.
+- **Helpful**: the **Agent Fundamentals** skill for the loop/tool/planning vocabulary used when discussing LangChain agents; the **Agent Memory** skill for the deeper theory behind the memory classes covered here at an implementation level.
+- **Helpful for comparisons**: the **LlamaIndex**, **PydanticAI**, and **DSPy** skills, referenced throughout for contrast; the **LangGraph** and **LangSmith** skills, which are LangChain's own sibling projects and are referenced here as the recommended escalation path for complex agents and for observability, respectively.
 
-Dependency chain: **Agent Fundamentals** → this page (LangChain) → **LangGraph** (the platform's next skill, addressing LangChain's own limitations for complex stateful workflows) → **CrewAI** and the remaining framework-specific skills.
+Dependency chain on this platform: **Python** → **Prompt Engineering** → **Tool Calling** / **RAG** → **this page** → **LangGraph** (for stateful multi-step agents) and **LangSmith** (for tracing/evaluation) as the natural next steps.
 `,
 
   "beginner-concepts": `
-### A simple LCEL chain
+### Your first LLM call through LangChain
+
+LangChain wraps provider SDKs behind a common chat model interface so switching providers is a constructor change.
+
+~~~python
+from langchain_openai import ChatOpenAI
+
+# temperature and timeout are explicit; never leave a production call
+# without a timeout, since a hung request otherwise blocks indefinitely
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0.2, timeout=30)
+
+response = model.invoke("Explain LCEL in one sentence.")
+print(response.content)
+~~~
+
+Note honestly: **invoke** is the current idiom across recent LangChain versions, replacing older direct-call patterns from 2023-era code you may still see in tutorials — LangChain's API has churned enough that treating any single snippet (including this one) as permanently authoritative is a mistake; always check the installed version's docs when something does not behave as shown here.
+
+### Prompt templates
+
+A **PromptTemplate** (for plain-text prompts) or **ChatPromptTemplate** (for chat-style, role-tagged messages) parameterizes a prompt so you fill in variables instead of concatenating strings by hand.
 
 ~~~python
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a concise assistant for {domain} questions."),
+    ("human", "{question}"),
+])
+
+# .invoke() fills the template's variables and returns a list of messages
+messages = prompt.invoke({"domain": "billing", "question": "How do refunds work?"})
+print(messages.to_messages())
+~~~
+
+### LCEL: composing with the pipe operator
+
+The single most important beginner concept is LCEL's "|" operator: it chains a prompt, a model, and an output parser into one runnable object.
+
+~~~python
 from langchain_core.output_parsers import StrOutputParser
 
-prompt = ChatPromptTemplate.from_template("Summarize this in one sentence: {text}")
-model = ChatOpenAI(model="gpt-4")
-parser = StrOutputParser()
+chain = prompt | model | StrOutputParser()
 
-chain = prompt | model | parser
-result = chain.invoke({"text": "a long article about..."})
+# one call, but internally: fill template -> call model -> parse to plain string
+answer = chain.invoke({"domain": "billing", "question": "How do refunds work?"})
+print(answer)
 ~~~
 
-The pipe operator (\`|\`) composes a prompt template, a model call, and an output parser into a single, reusable chain — directly the LCEL pattern LangChain is built around.
+Every piece in that pipe implements the same **Runnable** interface, which is why the same chain object transparently supports **.invoke()** (single call), **.batch()** (many inputs concurrently), **.stream()** (token-by-token output), and their async equivalents (**.ainvoke()**, **.abatch()**, **.astream()**) without you writing separate code paths for each.
 
-### Tool integration: a simple example
+### Output parsers
+
+Output parsers turn a raw model response into a structured Python value.
 
 ~~~python
-from langchain_core.tools import tool
+from langchain_core.output_parsers import JsonOutputParser
 
-@tool
-def get_weather(location: str) -> str:
-    """Get the current weather for a location."""
-    return weather_api.query(location)
+json_chain = prompt | model | JsonOutputParser()
+# Prompts the model to produce JSON, then parses it — fragile if the model
+# doesn't comply exactly; see Intermediate Concepts for the more reliable
+# structured-output approach built on native tool-calling APIs.
 ~~~
 
-This decorator turns a plain Python function into a structured tool the LangChain agent framework can invoke — directly the structured tool-calling pattern covered in **Agent Fundamentals**.
-
-### A simple LangChain agent
-
-~~~python
-from langchain.agents import create_tool_calling_agent, AgentExecutor
-
-agent = create_tool_calling_agent(model, tools=[get_weather], prompt=agent_prompt)
-executor = AgentExecutor(agent=agent, tools=[get_weather])
-result = executor.invoke({"input": "What's the weather in Tokyo?"})
-~~~
-
-This directly implements the plan-act-observe loop covered in **Agent Fundamentals**, with LangChain handling the loop's mechanics.
+Common beginner trap: reaching for LangChain to make a single, one-off LLM call. If your entire "chain" is "format one prompt, call one model, print the text," you have added an abstraction layer, two extra imports, and a dependency on LangChain's versioning churn for something three lines of the raw provider SDK do just as well. LangChain earns its cost when there are multiple composed steps, swappable providers, or reusable structure — not for a single call (see Anti-Patterns and FAQs for this argument in depth).
 `,
 
   "intermediate-concepts": `
-### Memory: managing conversation state
+### Structured output the reliable way
+
+Parsing free-text JSON is fragile. Modern LangChain leans on the underlying model provider's native structured-output or tool-calling capability instead, wrapped uniformly:
+
+~~~python
+from pydantic import BaseModel, Field
+
+class RefundDecision(BaseModel):
+    eligible: bool = Field(description="Whether the refund is eligible")
+    reason: str = Field(description="Short justification")
+
+# with_structured_output binds the schema to the underlying provider's
+# native structured-output/tool-calling mechanism rather than asking the
+# model to "please output JSON" and hoping the parser can clean it up
+structured_model = model.with_structured_output(RefundDecision)
+result = structured_model.invoke("Customer wants a refund after 45 days, policy is 30 days.")
+print(result.eligible, result.reason)
+~~~
+
+This is meaningfully more reliable than a text-based JsonOutputParser because it uses the provider's own schema-constrained generation rather than hoping the model's free text happens to parse — the same idea underlies PydanticAI's whole design philosophy, just implemented as one option among many in LangChain rather than the framework's central premise.
+
+### Retrievers and RAG composition
+
+A **retriever** is anything that, given a query string, returns relevant documents. LangChain composes retrievers into chains the same way it composes models.
+
+~~~python
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
+
+# vectorstore is assumed already populated - see the RAG and Vector
+# Databases skills for how documents get embedded and indexed
+retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+
+rag_prompt = ChatPromptTemplate.from_messages([
+    ("system", "Answer using only the provided context. If the context "
+               "doesn't contain the answer, say you don't know.\\n\\nContext:\\n{context}"),
+    ("human", "{question}"),
+])
+
+def format_docs(docs):
+    return "\\n\\n".join(d.page_content for d in docs)
+
+rag_chain = (
+    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    | rag_prompt
+    | model
+    | StrOutputParser()
+)
+
+answer = rag_chain.invoke("What is our refund window?")
+~~~
+
+This is a complete, honest LCEL RAG example: the dict on the left runs **retriever | format_docs** and passes the raw question through in parallel, both feeding into the prompt template. For deep RAG needs — many document types, multiple index structures, reranking, hybrid search — the LlamaIndex skill covers a framework that treats this exact problem as its central mission with considerably more depth than LangChain's retriever abstraction offers out of the box.
+
+### Memory: giving a chain conversation history
 
 ~~~python
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
-history = InMemoryChatMessageHistory()
-chain_with_memory = RunnableWithMessageHistory(chain, lambda session_id: history)
-~~~
+store: dict[str, InMemoryChatMessageHistory] = {}
 
-LangChain's memory abstractions manage conversation history across multi-turn interactions, directly connecting to the **LLM Fundamentals** skill's own context-window treatment — memory must eventually be summarized or truncated as conversations grow.
+def get_history(session_id: str) -> InMemoryChatMessageHistory:
+    if session_id not in store:
+        store[session_id] = InMemoryChatMessageHistory()
+    return store[session_id]
 
-### Retrieval integration: building a RAG chain
+chat_chain = prompt | model
+chain_with_history = RunnableWithMessageHistory(
+    chat_chain, get_history,
+    input_messages_key="question", history_messages_key="history",
+)
 
-~~~python
-from langchain_core.runnables import RunnablePassthrough
-
-retriever = vectorstore.as_retriever()  # directly connects to the
-                                          # Vector Search / vector DB skills
-rag_chain = (
-    {"context": retriever, "question": RunnablePassthrough()}
-    | prompt
-    | model
-    | parser
+# each call with the same session_id sees prior turns injected automatically
+response = chain_with_history.invoke(
+    {"question": "And what about annual plans?"},
+    config={"configurable": {"session_id": "user-42"}},
 )
 ~~~
 
-This directly composes a retriever (backed by a vector database, covered in the platform's vector database skills) with a prompt and model call, implementing retrieval-augmented generation — a direct, practical application of the **Vector Search** skill's own concepts, and a key mitigation for the **Hallucination** skill's own concerns.
+This pattern replaced LangChain's older, now-legacy **ConversationBufferMemory**-style classes; the underlying idea (persist message history, inject it into the prompt on each call) is unchanged, but the concrete API has moved — another instance of the version churn to expect and plan for. Naive buffer memory grows unboundedly with conversation length and eventually blows the context window or the token budget; production systems window it (keep last N turns), summarize older turns, or use a dedicated store — see the **Agent Memory** skill for the deeper theory behind these strategies.
 
-### Output parsing and structured output
+### Runnable composition primitives beyond the simple pipe
 
 ~~~python
-from langchain_core.output_parsers import PydanticOutputParser
-from pydantic import BaseModel
+from langchain_core.runnables import RunnableParallel, RunnableLambda
 
-class Summary(BaseModel):
-    title: str
-    key_points: list[str]
+# Run several sub-chains concurrently on the same input, merge results
+parallel = RunnableParallel(
+    summary=summarize_chain,
+    sentiment=sentiment_chain,
+)
 
-parser = PydanticOutputParser(pydantic_object=Summary)
-~~~
-
-Directly connects to the **Prompt Engineering** skill's own structured-output treatment, letting a chain produce validated, typed output rather than raw text.
-
-### Multiple agent execution strategies
-
-~~~
-LangChain supports several agent "types" (ReAct-style, tool-
-calling-native, and others), each a different concrete
-implementation of the plan-act-observe loop covered in
-Agent Fundamentals -- the tool-calling-native strategy,
-relying on the underlying model's own native function-calling
-API support, is generally the most reliable choice when
-available (directly connecting to Agent Fundamentals' own
-guidance preferring structured tool-calling interfaces over
-fragile, prompt-based parsing).
+# Wrap arbitrary Python logic as a first-class Runnable so it can be
+# piped alongside prompts/models with the same streaming/batch semantics
+double = RunnableLambda(lambda x: x * 2)
 ~~~
 `,
 
   "advanced-concepts": `
-### Why LangChain's own team increasingly recommends LangGraph for complex agents
+### Tool calling and agents
 
-~~~
-LangChain's higher-level AgentExecutor abstraction handles
-the STANDARD plan-act-observe loop well, but genuinely
-complex agentic workflows often require more explicit control
-over STATE, CONDITIONAL branching between steps, human-in-
--the-loop checkpoints (directly connecting to Agent
-Fundamentals' own autonomy-level treatment), and CYCLES
-(returning to an earlier step based on a later observation)
--- capabilities LangGraph (the platform's next skill)
-provides at a lower, more explicit level than LangChain's
-higher-level agent abstractions.
-~~~
-
-### Streaming and LCEL's built-in support
+A LangChain **tool** is a Python function (or class) with a name, description, and typed arguments that a model can choose to call. An **agent** is a loop: call the model, check if it requested a tool call, execute the tool, feed the result back, repeat until the model produces a final answer.
 
 ~~~python
-for chunk in chain.stream({"text": "..."}):
+from langchain_core.tools import tool
+
+@tool
+def get_order_status(order_id: str) -> str:
+    "Look up the current shipping status for a given order ID."
+    # in production: call a real order-service API with a timeout,
+    # and handle the not-found case explicitly rather than raising
+    return f"Order {order_id} is out for delivery."
+
+model_with_tools = model.bind_tools([get_order_status])
+response = model_with_tools.invoke("Where is order A123?")
+# response.tool_calls contains the model's requested tool invocation(s);
+# your code (or an AgentExecutor/LangGraph loop) must actually execute
+# them and feed the result back for the model to produce a final answer
+~~~
+
+The tool's docstring is not decoration — it is the description the model reads to decide when and how to call the tool, exactly as covered in the **Tool Calling** skill. A vague docstring produces a model that either never calls the tool or calls it with wrong arguments.
+
+### AgentExecutor versus LangGraph
+
+LangChain's original agent abstraction, **AgentExecutor**, runs a fixed reasoning-and-acting loop (classically ReAct-style: think, act, observe, repeat) until the model stops requesting tools. It is straightforward for simple, single-loop tool-calling agents but becomes awkward once you need: branching logic based on tool results, human-in-the-loop approval steps, persistent state across a long-running task, or explicit control over retries and error recovery. LangChain's own current guidance is to reach for **LangGraph** once an agent's control flow needs anything beyond a simple loop — LangGraph models the agent explicitly as a graph of nodes and edges with a shared state object, which makes cycles, conditionals, and interrupts first-class instead of something you fight the executor to express. In practice, many teams prototype with a simple LCEL chain or **AgentExecutor**, then migrate the same tools and prompts into a LangGraph graph once real requirements (approval steps, retries, parallel tool calls with reconciliation) show up.
+
+### Streaming internals
+
+Because every LCEL component implements the same Runnable interface, streaming composes automatically: a chat model's **.stream()** yields tokens as they arrive from the provider, and each subsequent step in the chain (an output parser, a formatting function) can be built to pass chunks through incrementally rather than waiting for the full response. This is why **.stream()** on a whole chain, not just a single model call, is a first-class LCEL feature rather than something you bolt on separately per chain.
+
+~~~python
+for chunk in chain.stream({"domain": "billing", "question": "Refund window?"}):
     print(chunk, end="", flush=True)
 ~~~
 
-LCEL chains support streaming, batching, and async execution uniformly across any composed chain, directly connecting to the **Serving** skill's own treatment of token-by-token streaming for responsive user-facing applications.
+### Batching and concurrency
 
-### The "black box" abstraction risk
+~~~python
+questions = [{"domain": "billing", "question": q} for q in [
+    "Refund window?", "Do you support annual billing?", "Where's my invoice?",
+]]
 
-~~~
-A genuine, well-known criticism of LangChain (and heavily-
-abstracted frameworks generally) is that its higher-level
-abstractions can obscure exactly what prompt is actually
-being sent to the model and exactly how a chain's steps are
-being executed -- directly complicating debugging when
-something goes wrong. Senior engineers mitigate this by using
-LangSmith (covered in its own platform skill) for full chain/
-agent trace visibility, and by understanding the underlying
-LLM calls a given abstraction ultimately makes.
+# .batch() runs requests concurrently up to a configurable max_concurrency,
+# rather than sequentially — important for both latency and cost when you
+# have many independent LLM calls to make (e.g. batch classification jobs)
+answers = chain.batch(questions, config={"max_concurrency": 5})
 ~~~
 
-### Custom tools and the broader integration ecosystem
+### Runnable configuration and fallbacks
 
-LangChain provides a large, standardized ecosystem of pre-built tool integrations (web search, code execution, database queries, and many others) alongside the ability to define fully custom tools, directly reducing redundant integration work across projects — but a senior engineer evaluates whether a given pre-built integration genuinely fits their use case rather than assuming it does by default.
+~~~python
+resilient_model = model.with_retry(stop_after_attempt=3).with_fallbacks([
+    ChatOpenAI(model="gpt-4o", timeout=30),  # a stronger fallback model
+])
+~~~
+
+Retry and fallback wrapping matters in production because LLM API calls fail for reasons unrelated to your prompt: rate limits, transient network errors, provider outages. Wrapping every production-facing chain with retry/fallback logic is table stakes, not an advanced trick — see Best Practices.
+
+### Decision table: LCEL chain versus AgentExecutor versus LangGraph
+
+| Situation | Reach for |
+|-----------|-----------|
+| Fixed sequence of steps, no branching, no tool-calling loop | Plain LCEL chain |
+| Model picks from a small, fixed tool set in a single reasoning loop | **AgentExecutor** (or an equivalent simple LangGraph graph) |
+| Multi-step reasoning with branching, retries, or approval gates | LangGraph |
+| Long-running, resumable, or human-in-the-loop workflows | LangGraph (with checkpointing) |
+| Multiple cooperating agents with distinct roles | LangGraph (graph of agent nodes) or a dedicated multi-agent framework |
 `,
 
   "internal-working": `
-Tracing an LCEL RAG chain's execution, illustrating how LangChain's abstractions compose into a single, coherent flow:
+Understanding what actually happens when an LCEL chain runs demystifies most debugging:
 
 ~~~mermaid
-sequenceDiagram
-    participant User
-    participant Chain as LCEL Chain
-    participant Retriever
-    participant VectorDB as Vector Database
-    participant Model as LLM
-
-    User->>Chain: invoke({"question": "..."})
-    Chain->>Retriever: retrieve(question)
-    Retriever->>VectorDB: similarity search
-    VectorDB->>Retriever: relevant documents
-    Retriever->>Chain: context documents
-    Chain->>Chain: format prompt with\ncontext + question
-    Chain->>Model: generate(formatted prompt)
-    Model->>Chain: raw response
-    Chain->>Chain: parse output
-    Chain->>User: final structured result
+flowchart LR
+    I["Input dict\n(e.g. {question, domain})"] --> P["PromptTemplate.invoke()\nfills variables -> messages"]
+    P --> M["ChatModel.invoke()\nsends messages to provider API"]
+    M --> R["Raw API response\n(text or tool_calls)"]
+    R --> O["OutputParser.invoke()\nparses to string/JSON/typed object"]
+    O --> OUT["Final chain output"]
 ~~~
 
-1. **The chain's \`invoke\` call triggers each composed step in sequence**, with LCEL's pipe operator determining the data flow between them.
-2. **The retriever step queries the underlying vector database** (directly connecting to the **Vector Search** and vector database skills) for documents relevant to the input question.
-3. **These retrieved documents are formatted into the prompt** alongside the original question, directly implementing the retrieval-augmented generation pattern.
-4. **The model generates a response based on this augmented prompt**, and the output parser transforms the raw response into the final, structured result.
+Step by step:
 
-**Why this matters**: this trace demonstrates precisely how LangChain's composable abstractions (retrievers, prompts, models, parsers) combine into a single, coherent pipeline — each step's output becoming the next step's input, directly analogous to the general chain-composition pattern underlying LCEL as a whole.
+1. **.invoke() on the composed chain** calls .invoke() on the first Runnable (the prompt template) with the input dict, producing a formatted list of role-tagged messages (system/human/ai).
+2. **Those messages are passed to the chat model's .invoke()**, which serializes them into the specific request format the underlying provider's API expects (OpenAI, Anthropic, and others all have subtly different message/tool-call schemas — the chat model wrapper's whole job is normalizing this) and makes the actual HTTP call.
+3. **The raw API response** — text content and/or structured tool-call requests — is wrapped into LangChain's own message object, which every downstream step operates on uniformly regardless of which provider produced it.
+4. **The output parser's .invoke()** receives that message and transforms it: StrOutputParser extracts plain text, JsonOutputParser parses (and often auto-repairs) JSON, a structured-output parser validates against a Pydantic schema.
+5. **Streaming works by the same composition, incrementally**: .stream() calls each step's streaming variant, passing partial chunks downstream as they arrive rather than waiting for the full output of each stage — this is why a well-built chain can stream tokens end-to-end even through an output parser, provided that parser supports incremental parsing (not all do; some necessarily buffer until the full output is available, e.g. full-document JSON parsing).
+
+For agents, the loop adds one more layer: after step 3, the executor (or a LangGraph node) inspects the response for tool_calls, executes the matching Python function(s), appends the tool result as a new message, and re-invokes the model with the updated message history — repeating until the model responds without further tool calls.
 `,
 
   architecture: `
-A senior AI engineer thinks about LangChain architecture in terms of choosing the right abstraction level (simple chains vs. agents vs. LangGraph) for a given task's actual complexity, and maintaining full observability into what the framework is actually doing.
-
-### Choosing the right abstraction level
+### Runtime architecture
 
 ~~~mermaid
 flowchart TB
-    Task["A given LLM application task"] --> Q{"Does the task need\nmulti-step, conditional,\nor stateful/cyclic\nbehavior?"}
-    Q -->|No -- simple, linear flow| Chain["Use a simple LCEL chain"]
-    Q -->|"Yes, standard\nplan-act-observe\nagent loop"| Agent["Use LangChain's\nAgentExecutor"]
-    Q -->|"Yes, complex state,\nbranching, cycles,\nhuman-in-the-loop"| LangGraph["Use LangGraph\n(the platform's next skill)"]
+    subgraph App["Your application"]
+        Prompts["Prompt templates"] --> Chain["LCEL chain\n(Runnable composition)"]
+        Retr["Retriever\n(vector store client)"] --> Chain
+        Mem["Message history store"] --> Chain
+        Tools["Tools (typed functions)"] --> Agent["Agent loop\n(AgentExecutor or LangGraph)"]
+        Chain --> Agent
+    end
+    Agent --> ModelAPI["LLM provider API\n(OpenAI/Anthropic/etc.)"]
+    Chain --> ModelAPI
+    Retr --> VS[("Vector store")]
+    App -.traces/spans.-> LangSmith["LangSmith\n(tracing, eval, monitoring)"]
 ~~~
 
-### Maintaining observability into abstraction internals
+The architectural core is the **Runnable** interface: every composable piece (prompt, model, parser, retriever, even arbitrary functions wrapped via **RunnableLambda**) implements the same **.invoke/.batch/.stream** (and async variants) contract, which is what makes the pipe operator ("|") meaningful — it is function composition over a shared interface, not special-cased syntax per pair of types.
 
-A senior practitioner integrates LangSmith (or equivalent tracing) from the start of development, rather than treating chain/agent internals as an opaque black box only investigated once something breaks in production.
+### Package layout (as of the current split architecture)
+
+- **langchain-core**: the base abstractions — Runnable, messages, prompt templates, output parsers. Minimal dependencies, meant to be stable.
+- **langchain**: chains, agents, and other higher-level constructs built on langchain-core.
+- **langchain-community**: third-party integrations (vector stores, document loaders, tools) that don't warrant their own dedicated package.
+- **Provider-specific packages** (langchain-openai, langchain-anthropic, langchain-qdrant, etc.): first-party-maintained integrations that graduated out of langchain-community for better versioning and support.
+
+### Application layout for a production LangChain service
+
+~~~
+llmservice/
+├── pyproject.toml
+├── src/llmservice/
+│   ├── chains/
+│   │   ├── rag_chain.py       # retriever + prompt + model + parser composition
+│   │   └── classify_chain.py  # structured-output classification chain
+│   ├── agents/
+│   │   └── support_agent.py   # tool-calling agent (or LangGraph graph)
+│   ├── tools/
+│   │   └── order_tools.py     # typed @tool functions
+│   ├── memory/
+│   │   └── history_store.py   # session-keyed chat history backend
+│   ├── api/                   # FastAPI routes exposing /chat, /classify
+│   └── observability/
+│       └── langsmith_config.py
+└── tests/
+~~~
+
+This mirrors the LlamaIndex and general agent-service layouts on this platform: chains/agents depend on tools and memory, the API layer depends on chains/agents (never the reverse), and observability config is wired once at startup, not scattered per call.
 `,
 
   "data-flow": `
-Tracing a request through a LangChain tool-calling agent, illustrating the plan-act-observe loop's concrete implementation:
+Tracing one tool-calling agent turn end to end as a sequence diagram:
 
 ~~~mermaid
 sequenceDiagram
     participant User
-    participant Executor as AgentExecutor
-    participant Model as LLM
-    participant Tool as Registered Tool
+    participant Agent as Agent loop
+    participant LLM as LLM API
+    participant Tool as get_order_status()
+    participant LS as LangSmith
 
-    User->>Executor: invoke({"input": "question"})
-    Executor->>Model: generate (with tool\ndefinitions available)
-    Model->>Executor: tool call request\n(structured, native function calling)
-    Executor->>Tool: execute tool with\nmodel-provided arguments
-    Tool->>Executor: tool result
-    Executor->>Model: generate again (with tool\nresult appended to context)
-    Model->>Executor: final answer (no further\ntool calls needed)
-    Executor->>User: final result
+    User->>Agent: invoke("Where is order A123?")
+    Agent->>LLM: messages + tool schemas
+    LLM-->>Agent: tool_call: get_order_status(order_id="A123")
+    Agent->>LS: log span (model call + tool_call)
+    Agent->>Tool: execute(order_id="A123")
+    Tool-->>Agent: "out for delivery"
+    Agent->>LLM: messages + tool result appended
+    LLM-->>Agent: final text answer
+    Agent->>LS: log span (final answer)
+    Agent-->>User: "Order A123 is out for delivery."
 ~~~
 
-The critical detail: each iteration through the model directly implements one cycle of **Agent Fundamentals**' plan-act-observe loop, with LangChain's \`AgentExecutor\` handling the mechanics of tool invocation and context accumulation across iterations automatically.
+The most misunderstood part for newcomers is that the model never directly executes anything — it only ever requests a tool call by name and arguments; your application code (the AgentExecutor, or a LangGraph node) is responsible for actually invoking the Python function and feeding the result back as a new message. A "tool didn't run" bug is therefore always an application-code bug (the tool wasn't registered, threw an exception that wasn't handled, or the executor didn't loop again), never something to look for inside the model itself. LangSmith traces (see Monitoring) are the fastest way to see exactly which step in this sequence went wrong, because they capture the literal request/response payloads at each hop.
 `,
 
   "production-usage": `
-### A representative production RAG application using LCEL
+### Model and chain configuration
 
 ~~~python
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI
 
-rag_chain = (
-    {"context": retriever | format_docs, "question": RunnablePassthrough()}
-    | prompt
-    | model
-    | StrOutputParser()
+# Explicit timeout and max_retries are non-negotiable in production;
+# the defaults are not always conservative enough for a user-facing path
+model = ChatOpenAI(
+    model="gpt-4o-mini",
+    temperature=0.1,
+    timeout=20,
+    max_retries=2,
 )
-
-# Full observability via LangSmith tracing (set via environment variables)
-# LANGCHAIN_TRACING_V2=true
-# LANGCHAIN_API_KEY=...
 ~~~
 
-### Non-negotiables for production LangChain applications
+### Environment and secrets
 
-1. **Integrate LangSmith (or equivalent tracing) from the start**, avoiding the "black box" debugging risk.
-2. **Choose the right abstraction level deliberately** — simple chains for linear flows, agents for standard tool-use loops, LangGraph for genuinely complex, stateful workflows.
-3. **Apply the same agent safety practices covered in Agent Fundamentals** — bounded iteration counts, appropriate autonomy levels, human-in-the-loop checkpoints for high-risk tool calls.
-4. **Validate pre-built integrations fit your actual use case** rather than assuming default configurations are production-ready.
-5. **Manage memory/context growth explicitly** for long-running conversational applications.
+~~~python
+import os
+# LangChain's provider integrations read API keys from environment
+# variables by convention (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.);
+# never hardcode keys in source, and load them via a secrets manager
+# in production rather than a plain .env file — see the Secrets
+# Management skill for the broader discipline.
+os.environ.setdefault("OPENAI_API_KEY", "")
+~~~
 
-### Common production patterns
+### Enabling LangSmith tracing
 
-- **RAG pipelines** combining retrievers (vector databases) with prompt templates and models.
-- **Tool-calling agents** for tasks requiring external actions or information beyond the model's training data.
-- **Multi-step chains** for structured, multi-stage processing pipelines (e.g., extract, then summarize, then classify).
+~~~python
+import os
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = "..."
+os.environ["LANGCHAIN_PROJECT"] = "support-agent-prod"
+# once set, every chain/agent invocation is automatically traced to
+# LangSmith with no per-call code changes required — see the LangSmith
+# skill for the full observability story this enables
+~~~
+
+Non-negotiables for production:
+
+1. **Set explicit timeouts and retry limits** on every model call — a hung request otherwise blocks a worker indefinitely, and unbounded retries can amplify an outage into a self-inflicted rate-limit spiral.
+2. **Pin LangChain package versions explicitly** (langchain-core, langchain, and each provider package) in your lockfile; the framework's churn means an unpinned upgrade can silently change or deprecate behavior you depend on.
+3. **Enable LangSmith (or an equivalent tracing setup) before you need it**, not after the first confusing production incident — reconstructing what a chain actually sent to the model after the fact, without traces, is much harder.
+4. **Treat every tool function as untrusted-input-adjacent**: validate arguments, set timeouts on tool execution, and never let a tool call perform an unbounded or irreversible side effect without an explicit confirmation step.
+5. **Separate the "just call the LLM" cases from the "genuinely needs composition" cases deliberately** — do not reach for a full chain, memory class, and output parser for a single stateless classification call where three lines of the raw SDK plus a Pydantic model would be clearer and have fewer moving parts.
 `,
 
   "industry-examples": `
-- **LangChain's own widespread adoption**: among the most-used open-source LLM application frameworks, with an enormous ecosystem of integrations and community contributions.
-- **RAG applications across many industries** (customer support, internal knowledge search, research assistants) commonly built using LangChain's retriever and chain abstractions.
-- **LangSmith's adoption alongside LangChain** for production observability, directly addressing the framework's own abstraction-opacity concerns.
+- **Klarna**: has publicly discussed using LangChain-style LLM orchestration as part of its AI customer-service assistant, which handles a large share of customer chats — a canonical "structured, tool-using conversational agent over internal systems" use case.
+- **Notion AI** and similar "AI features embedded in an existing product" teams commonly reach for LangChain's chain/retriever primitives to wire up features like Q&A over a workspace's own content, where the value is fast integration across multiple LLM/vector-store choices rather than one bespoke pipeline per feature.
+- **Many enterprise "internal chatbot over our docs/tickets/wiki" projects** across consulting and internal-tools teams use LangChain specifically because of its breadth of first-party and community integrations (loaders for Confluence, Notion, SharePoint, Slack, and dozens more) — the same "format sprawl" problem LlamaIndex also targets, from a different angle.
+- **Startups building agentic products** (customer support automation, sales-ops copilots, internal workflow assistants) frequently start with LangChain for its documentation and examples density, then increasingly migrate the agent-control-flow parts to LangGraph once the product needs branching, retries, or human approval steps that a simple **AgentExecutor** loop handles awkwardly.
+
+Pattern to notice: the common thread is fast integration breadth (many providers, many data sources, many tools) mattering more than any single deeply optimized pipeline — precisely LangChain's strength, and precisely why teams with a narrower, deeper need (heavy RAG tuning, prompt-program optimization, minimal typed agents) often reach for LlamaIndex, DSPy, or PydanticAI instead for that specific slice of the system.
 `,
 
   "best-practices": `
-1. **Integrate LangSmith (or equivalent tracing) from the start of development**, not as an afterthought once something breaks.
-2. **Choose the right abstraction level deliberately** — don't reach for a full agent when a simple chain suffices, and don't force a complex, stateful workflow into LangChain's higher-level agent abstractions when LangGraph fits better.
-3. **Use native, model-provided function calling for tool integration** where available, directly reusing **Agent Fundamentals**' own structured-tool-calling guidance.
-4. **Apply Agent Fundamentals' safety practices**: bounded iteration counts, appropriate autonomy levels, human-in-the-loop checkpoints.
-5. **Understand the underlying LLM calls a given abstraction makes**, avoiding "black box" debugging difficulty.
-6. **Validate pre-built integrations against your actual use case** before relying on them in production.
-7. **Manage memory/context growth explicitly**, directly connecting to the **LLM Fundamentals** skill's own context-window treatment.
+1. **Default to raw provider SDK calls for single, non-composed LLM calls**; reach for LangChain when you actually have multiple composed steps, swappable providers, or reusable structure across many call sites.
+2. **Pin exact versions of langchain-core, langchain, langchain-community, and every provider package** in your lockfile — do not let a routine dependency update silently change chain behavior.
+3. **Prefer with_structured_output over text-based JSON output parsers** whenever the underlying model supports native structured output/tool-calling — it is materially more reliable.
+4. **Set explicit timeouts and bounded retries on every model call**, and add fallback models for user-facing paths where availability matters more than always using the primary model.
+5. **Enable LangSmith tracing (or equivalent) from day one in any non-trivial application** — reconstructing chain behavior after an incident without traces wastes far more time than the setup cost.
+6. **Escalate from AgentExecutor to LangGraph as soon as you need branching, retries, human-in-the-loop steps, or persistent state** — do not keep bending the simple executor to fit control flow it wasn't designed for.
+7. **Write tool docstrings as carefully as you write prompts** — the model reads them to decide when and how to call a tool; a vague docstring produces unreliable tool selection.
+8. **Window or summarize conversational memory deliberately**; never let an unbounded message history grow until it silently blows the context window or the token budget.
+9. **Treat every tool function as a security boundary**: validate inputs, timebox execution, and gate irreversible actions (payments, deletions, external sends) behind an explicit confirmation step, never a bare model decision.
+10. **Test chains against fixed, versioned prompt/model configurations** — a chain's behavior can shift when the underlying model version changes even if your code doesn't, so evaluation (see Testing) needs to catch that independently of code review.
+11. **Read the changelog before every LangChain upgrade.** Given the framework's history of renamed and deprecated APIs, treat upgrades as a deliberate, tested activity, not a routine **pip install -U**.
+12. **Keep a clear mental model of what a chain actually sends to the model** — use LangSmith or verbose logging to inspect the literal request payload when a chain behaves unexpectedly, rather than guessing from the abstraction alone.
 `,
 
   "anti-patterns": `
-### Treating LangChain abstractions as a black box
+### Using a full chain for a single stateless call
 
-~~~
-# WRONG — deploying a complex chain/agent without understanding
-# what prompt is actually being sent to the model or how
-# each step's data flows, making debugging genuinely difficult
-# RIGHT — integrate LangSmith tracing and understand the
-# underlying LLM calls each abstraction makes
-~~~
+~~~python
+# WRONG: three extra imports and a dependency on LangChain's own
+# versioning churn, for something that doesn't compose or reuse anything
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
-### Using LangChain's higher-level agent for genuinely complex, stateful workflows
+prompt = ChatPromptTemplate.from_messages([("human", "Summarize: {text}")])
+chain = prompt | ChatOpenAI(model="gpt-4o-mini") | StrOutputParser()
+summary = chain.invoke({"text": document})
 
-~~~
-# WRONG — forcing a workflow requiring complex conditional
-# branching, cycles, and explicit state management into
-# LangChain's higher-level AgentExecutor abstraction
-# RIGHT — use LangGraph (the platform's next skill) for
-# genuinely complex, stateful, or cyclic agent workflows
-~~~
-
-### Skipping Agent Fundamentals' safety practices
-
-~~~
-# WRONG — deploying a LangChain agent with unbounded
-# iterations and no human-in-the-loop checkpoints for
-# high-risk tool calls
-# RIGHT — apply the same bounded-iteration and autonomy-
-# level calibration covered in Agent Fundamentals
+# RIGHT (for a single, non-reused call): call the provider SDK directly
+from openai import OpenAI
+client = OpenAI()
+summary = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": f"Summarize: {document}"}],
+    timeout=20,
+).choices[0].message.content
 ~~~
 
 ### Other production-grade anti-patterns
 
-- **Assuming a pre-built integration is production-ready without validation** against your actual use case.
-- **Not managing memory/context growth explicitly** in long-running conversational applications, risking context-window overflow.
-- **Reaching for a full agent when a simple, linear LCEL chain would suffice**, adding unnecessary complexity and cost.
+- **Unbounded conversational memory.** Feeding an ever-growing raw message history into every call eventually blows the context window and inflates cost linearly with conversation length; window or summarize deliberately (see Intermediate Concepts).
+- **Text-based JSON parsing when structured output is available.** Asking the model to "output valid JSON" and hand-parsing it is measurably less reliable than **with_structured_output** against the provider's native schema-constrained generation.
+- **No timeout or retry policy on model calls.** A single hung request blocks a worker indefinitely in a naive setup; production paths need explicit timeouts, bounded retries, and ideally a fallback model.
+- **Bending AgentExecutor to force branching or approval-gate logic it wasn't designed for**, instead of migrating to LangGraph once control flow genuinely needs cycles or conditionals.
+- **Pinning nothing and upgrading LangChain casually.** Given the documented history of renamed/deprecated classes across versions, an unpinned dependency update is a realistic source of silent production breakage.
+- **Vague tool docstrings.** A tool named **process** with a one-word description gives the model almost nothing to reason about when deciding whether and how to call it — write tool descriptions with the same care as a prompt.
+- **Treating LangChain verbosity as inherent to LLM application code.** Some of the community criticism of LangChain (see FAQs) stems from real cases where a simple task was made to look complex through unnecessary layers of abstraction; recognizing when that's happening in your own code is a mark of seniority, not a criticism to dismiss reflexively.
 `,
 
   performance: `
-### Rule zero: choose the simplest abstraction genuinely sufficient for the task
+### Measure first
 
-A simple LCEL chain is faster, cheaper, and more predictable than a full agent loop — reserve agents specifically for tasks genuinely requiring multi-step, tool-using, conditional behavior.
+~~~python
+import time
 
-### The performance hierarchy (apply in order)
+start = time.perf_counter()
+response = chain.invoke({"question": "..."})
+print(f"chain call took {time.perf_counter() - start:.2f}s")
+~~~
 
-1. **Use a simple chain instead of an agent when the task doesn't genuinely require dynamic tool selection or multi-step reasoning.**
-2. **Leverage LCEL's built-in streaming and batching support** for responsive, efficient applications, directly connecting to the **Serving** skill's own treatment.
-3. **Cache retriever results and chain outputs where appropriate**, directly connecting to the **Caching Systems** skill's own general caching principles.
-4. **Apply Agent Fundamentals' bounded-iteration guidance** to avoid unnecessary, costly agent loop iterations.
+LangSmith traces (see Monitoring) give per-step timing automatically — model call latency, retriever latency, tool execution latency — which is almost always more informative than ad hoc timers, because most "LangChain is slow" complaints are actually one slow model call or one slow retriever, not framework overhead itself.
 
-### Micro-level facts worth knowing
+### The optimization hierarchy (apply in order)
 
-- Each step in an LCEL chain that involves a model call incurs the full latency/cost of an LLM inference call (directly connecting to the **Inference** skill's own treatment) — minimizing unnecessary model calls within a chain directly reduces both latency and cost.
-- LangChain's retriever abstraction's performance is fundamentally bounded by the underlying vector database's own ANN search performance (directly connecting to the **Vector Search** skill's own recall/latency tradeoff treatment).
-- LCEL's native streaming support allows a chain to begin returning output before the full generation completes, directly improving perceived responsiveness for user-facing applications.
+1. **Identify which hop is actually slow using traces before optimizing anything.** Guessing between "the model," "the retriever," and "the framework" without data wastes effort on the wrong lever.
+2. **Reduce the number of sequential model calls.** A chain that calls the model three times sequentially (rewrite query, retrieve, synthesize) is three times the latency of one well-designed call; consolidate steps where quality allows, or run independent steps in parallel with **RunnableParallel**.
+3. **Stream responses to improve perceived latency** on user-facing paths, even when total generation time is unchanged — **.stream()** composes through the whole chain as covered in Advanced Concepts.
+4. **Batch independent calls** with **.batch()** and a tuned **max_concurrency** rather than looping sequentially over many independent inputs (bulk classification, bulk summarization jobs).
+5. **Cache deterministic sub-steps** (embeddings for a static corpus, prompts with no dynamic content) rather than recomputing them on every request.
+6. **Choose the smallest model that meets the quality bar for each step** — a query-rewrite or classification sub-step rarely needs the same model as the final synthesis step; mixing model sizes across a chain's steps is a real cost lever.
+
+### Numbers worth internalizing
+
+Model API latency dominates almost every LangChain chain's total time by a wide margin over the framework's own Python-level overhead, which is typically single-digit milliseconds per Runnable hop; the actual performance work in a LangChain application is therefore about call count, call size, and model choice, not about the composition layer itself.
 `,
 
   scalability: `
-LangChain's abstraction choices directly determine how confidently an organization can scale from a simple prototype into a production-grade, maintainable LLM application.
-
-### How disciplined abstraction choice enables scaling
+LangChain itself is a stateless orchestration library; scalability is a property of the model API, the vector store, and how you structure your own service around them.
 
 ~~~mermaid
 flowchart LR
-    RightAbstraction["Right abstraction level +\nfull observability"] --> Maintainable["Maintainable, debuggable\nproduction application"]
-    Maintainable --> ConfidentScaling["Confident scaling to\nadditional features and\nhigher production traffic"]
+    LB["Load balancer"] --> API1["Chat API replica 1"]
+    LB --> API2["Chat API replica N"]
+    API1 & API2 --> ModelAPI["LLM provider API\n(rate-limited)"]
+    API1 & API2 --> VS[("Vector store")]
+    API1 & API2 --> LS["LangSmith\n(async trace ingestion)"]
 ~~~
 
-### Known ceilings and answers
+### Scaling the request path
+
+- **Horizontal**: chain/agent execution is stateless per request (given externalized session history and a shared vector store), so scale API replicas like any stateless service behind a load balancer.
+- **Model API concurrency**: the real bottleneck at scale is almost always the LLM provider's rate limits and latency, not LangChain's own code — plan capacity around provider rate limits, use connection pooling, and consider request queuing/backoff for burst traffic.
+- **Session/message history store**: externalize conversational memory to a shared store (Redis, a database) rather than in-process memory, so any replica can serve any session — see the **Redis** and **Agent Memory** skills.
+
+### Bottleneck table
 
 | Bottleneck | Answer |
 |------------|--------|
-| Complex, stateful, cyclic agent workflow outgrowing AgentExecutor | Migrate to LangGraph (the platform's next skill) |
-| Debugging difficulty from opaque chain internals | Integrate LangSmith tracing from the start |
-| Retriever latency bottleneck | Optimize the underlying vector database's ANN configuration (Vector Search skill) |
-| Growing conversational memory approaching context limits | Implement explicit summarization/truncation strategies |
+| LLM provider rate limits under burst traffic | Request queuing, backoff, multiple API keys/regions, or a self-hosted inference cluster for high-volume traffic |
+| In-process message history limiting horizontal scale | Externalize session history to Redis/a database, keyed by session ID |
+| Sequential multi-step chains adding up latency | Parallelize independent steps with RunnableParallel; consolidate steps where quality allows |
+| Vector store latency at large corpus size | Approximate nearest-neighbor indexing, sharding — see the Vector Databases skills |
+| Tracing overhead at very high QPS | Sample traces rather than tracing every request, or batch trace ingestion asynchronously |
 `,
 
   security: `
-### LangChain-specific security considerations, directly extending Agent Fundamentals and Guardrails
+### LangChain-specific attack surface
 
-~~~
-LangChain applications inherit every agent-related security
-concern covered in Agent Fundamentals -- a tool-calling
-agent capable of taking real actions represents a genuinely
-expanded risk surface, and untrusted tool results fed back
-into the agent's context should be treated with the same
-caution as any other untrusted input (directly connecting
-to the OWASP Top 10 skill's own input-validation guidance).
-~~~
+1. **Prompt injection via retrieved or tool-returned content.** Any content a chain retrieves (documents, tool outputs, web search results) and feeds back into a subsequent model call is untrusted input from the model's perspective — a malicious document or API response can attempt to override the system prompt's instructions. Treat retrieved/tool content as data, not as trusted instructions, and keep system-level instructions clearly reinforced.
+2. **Unsafe tool execution.** A tool that can run arbitrary code, execute shell commands, or perform irreversible actions (payments, deletions, sending external communications) should never be invoked purely on a model's decision without validation and, for high-stakes actions, an explicit human confirmation step. The model can be manipulated (via prompt injection or simply by being wrong) into requesting a harmful tool call.
+3. **Secrets in chain configuration or logs.** API keys passed to model/vector-store constructors must come from environment variables or a secrets manager, never hardcoded; and verbose/debug logging of full chain inputs can inadvertently log secrets or sensitive user data if not scrubbed.
+4. **SSRF via loaders and tools that fetch URLs.** Document loaders and tools that accept arbitrary URLs (web loaders, fetch tools) are a server-side request forgery vector if exposed to unauthenticated or unvalidated user input.
+5. **Unbounded cost from unauthenticated endpoints.** A public chat endpoint without rate limiting or auth is a direct cost-abuse and prompt-injection vector, same as any LLM-backed endpoint.
 
-### Essential LangChain-related security practices
+### Defenses
 
-1. **Apply action-level guardrails to tool-calling agents**, directly reusing **Agent Fundamentals**' and **Guardrails**' own treatment.
-2. **Validate and sanitize retrieved documents and tool results** before they're incorporated into a prompt, mitigating prompt injection risk (directly connecting to the platform's later **Prompt Injection Defense** skill).
-3. **Limit tool permissions to the minimum genuinely necessary**, directly reusing the principle of least privilege.
-4. **Avoid hardcoding API keys/secrets in chain configuration**, directly connecting to the **Secrets Management** skill's own treatment.
+- Apply the principle of least privilege to every tool: scope database credentials, API permissions, and file-system access as narrowly as the tool's function requires.
+- Gate irreversible or high-value tool calls behind explicit confirmation, either a human-in-the-loop step (natural to express in LangGraph) or a secondary validation check.
+- Scrub logs and traces of secrets and sensitive user data before they reach LangSmith or any third-party observability tool.
+- Rate-limit and authenticate every user-facing chain/agent endpoint.
 
-See the **Agent Fundamentals**, **Guardrails**, and **OWASP Top 10** skills for the broader security context this connects to.
+See the dedicated **Prompt Injection**, **OWASP Top 10 for LLM Applications**, and **Secrets Management** skills for depth beyond what's LangChain-specific here.
 `,
 
   testing: `
-### Testing a simple LCEL chain
+### Testing a chain deterministically
 
 ~~~python
-def test_summarization_chain_produces_valid_output():
-    result = summarization_chain.invoke({"text": "sample article text..."})
-    assert isinstance(result, str) and len(result) > 0
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
+
+def test_rag_chain_uses_retrieved_context():
+    fake_model = FakeListChatModel(responses=["The refund window is 30 days."])
+    chain = rag_prompt | fake_model | StrOutputParser()
+    result = chain.invoke({"context": "Refunds allowed within 30 days.",
+                            "question": "What is the refund window?"})
+    assert "30 days" in result
 ~~~
 
-### Testing an agent's tool-calling behavior
+Using a fake/deterministic model for unit tests avoids real API calls (cost, latency, non-determinism) while still exercising the prompt formatting and output parsing logic — the parts of the chain that are actually your code, as opposed to the model's behavior.
 
-~~~python
-def test_agent_calls_weather_tool_for_weather_questions():
-    result = agent_executor.invoke({"input": "What's the weather in Tokyo?"})
-    # Verify the tool was actually invoked, directly reusing
-    # Agent Fundamentals' own trajectory-tracing testing guidance
-    assert weather_tool_was_called()
-~~~
+### The senior testing doctrine for LangChain applications
 
-### The senior testing doctrine
-
-- Test chain/agent OUTPUT correctness against representative inputs, directly connecting to the **Evaluation** skill's own rigorous measurement methodology.
-- Test that agents correctly invoke expected tools for representative queries, not just that a final answer is produced.
-- Test retriever quality (relevant documents actually retrieved) independently from the full RAG chain's end-to-end output.
-- Use LangSmith's evaluation features (or equivalent) for systematic, repeatable testing across a chain/agent's full execution trace.
+- **Unit test the deterministic parts** (prompt template variable filling, output parser behavior, tool argument validation) against fake or mocked models, never against a live API in CI.
+- **Integration test retrieval and tool execution against a small, controlled fixture set**, separate from generation-quality tests, so a retrieval regression and a generation regression are never conflated.
+- **Evaluate generation quality with an LLM-as-judge or rule-based rubric against a frozen model version**, and treat a model version upgrade as a deliberate, re-evaluated decision — chain code being unchanged does not mean chain behavior is unchanged if the underlying model moved.
+- **Never assert on exact LLM output text** for anything beyond a fake-model unit test; assert on structural properties (does the response cite the right source, does structured output validate against its schema) or LLM-judged criteria with a documented rubric.
+- **Pin LangChain package versions in the test environment** matching production exactly, since API behavior differences across versions are a real, documented source of test-vs-prod mismatches.
 `,
 
   debugging: `
 ### The toolbox, in escalation order
 
-1. **Check LangSmith (or equivalent) traces first**, examining exactly what prompt was sent and what each chain step actually produced.
-2. **Isolate the failing step** by testing each composed chain component (retriever, prompt, model, parser) independently.
-3. **Check tool-calling behavior specifically** if an agent produced an unexpected result, verifying which tools were actually invoked and with what arguments.
-4. **Check for context/memory growth issues** if a long-running conversational chain's behavior degrades over time.
-
-### Debugging common LangChain-related symptoms
-
-- "The chain produced an unexpected result" — check LangSmith traces to see the exact prompt sent to the model at each step.
-- "The agent didn't call the expected tool" — verify tool descriptions are clear enough for the model to select correctly, directly connecting to the **Prompt Engineering** skill's own clarity guidance.
-- "The RAG chain retrieved irrelevant documents" — debug the retriever/vector database configuration independently, directly connecting to the **Vector Search** skill's own tuning guidance.
-- "The conversational chain degrades over a long session" — check for context-window overflow from unmanaged, growing memory.
-`,
-
-  monitoring: `
-### Key signals to track
-
-- **Full chain/agent execution traces** (via LangSmith or equivalent), directly connecting to **Agent Fundamentals**' own trajectory-observability treatment.
-- **Retriever relevance metrics**, directly connecting to the **Vector Search** skill's own recall@k treatment.
-- **Tool invocation frequency and success/failure rates** for agent-based applications.
-- **Latency and cost per chain/agent execution**, directly connecting to the **Serving** skill's own observability treatment.
-
-### Tools
-
-**LangSmith** (covered in its own platform skill) is LangChain's purpose-built companion observability platform; general LLM observability tools (**Langfuse**, covered in its own skill) provide similar capability with broader framework support.
-
-### Alerting priorities
-
-Alert on a significant increase in agent tool-call failures or unexpected tool-selection patterns, and on retriever relevance degradation (directly connecting to the **Vector Search** skill's own monitoring guidance).
-`,
-
-  deployment: `
-### A representative deployment configuration
+1. **Turn on LangSmith tracing (or verbose mode) and inspect the literal request/response payload at each step**, before touching the prompt or the model — most "the chain gave a wrong answer" bugs are visible immediately once you see what was actually sent.
 
 ~~~python
 import os
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_API_KEY"] = os.environ["LANGSMITH_API_KEY"]  # never hardcoded
-
-app_chain = build_production_chain()  # composed from
-                                        # version-controlled prompt
-                                        # templates and configuration
+# every subsequent chain.invoke() call is now traced to LangSmith,
+# showing the exact prompt, model response, and any tool calls per step
 ~~~
 
-### CI/CD pipeline considerations
+2. **Isolate the failing step by calling it directly**, bypassing the rest of the chain — invoke just the retriever, or just the prompt template, to confirm which stage produced the unexpected output.
+3. **Check package versions against the documentation you're reading.** A huge fraction of "this doesn't work like the tutorial says" issues are version mismatches — the class or method was renamed, moved, or deprecated between the tutorial's version and yours.
+4. **Print the fully rendered prompt** (**prompt.invoke(inputs).to_messages()**) before it reaches the model — this catches template bugs (missing variables, wrong role tags, truncated context) invisible from the final answer alone.
+5. **For agent/tool-calling bugs, inspect response.tool_calls directly** rather than assuming the model's intent from the final text — a tool that "didn't get called" is often the model choosing not to call it, visible only by inspecting the raw tool-call field.
+6. **Reproduce with a fake/deterministic model** to separate "my chain's plumbing is wrong" from "the model's behavior is unexpected," the same isolation used in Testing.
 
-Treat prompt templates, chain configuration, and tool definitions as genuine, version-controlled application code, with automated evaluation (directly connecting to the **Evaluation** skill) against a representative test set as a deployment gate. See the **CI/CD** skill and the platform's later **LLMOps** skill for the general deployment depth this connects to.
+### Debugging version-related breakage specifically
+
+When an upgrade breaks a chain, check the specific package's changelog for renamed or deprecated classes before assuming a logic bug — LangChain's history includes several rounds of exactly this kind of churn (see History and Latest Updates), and the fix is very often "the import path or class name changed," not a deeper issue.
+`,
+
+  monitoring: `
+Production visibility for LangChain applications rests on both general service observability (see the Observability category) and LangSmith's LangChain-specific tracing.
+
+### LangSmith tracing
+
+~~~python
+import os
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_PROJECT"] = "support-agent-prod"
+
+# no other code changes needed — every chain/agent invocation is now
+# traced automatically, including nested steps (retriever calls, tool
+# calls, sub-chains), viewable as a structured trace tree in LangSmith
+response = chain.invoke({"question": "..."})
+~~~
+
+See the dedicated **LangSmith** skill for the full observability platform this enables — trace inspection, dataset-based evaluation, and production monitoring dashboards built specifically around LangChain (and non-LangChain) LLM applications.
+
+### Metrics to track beyond tracing
+
+- **Per-step latency** (retriever, model call, tool execution) broken out separately, so a latency regression is attributable to the right stage.
+- **Tool-call success/failure rate** and, separately, "the model chose not to call a tool when it should have" rate (harder to measure automatically, but visible via user feedback or spot review of traces).
+- **Token usage and cost per chain type**, since different chains (a one-call classification chain versus a multi-step agent) have very different cost profiles that are easy to lose track of in aggregate spend dashboards.
+- **Fallback/retry trigger rate** on model calls — a rising rate signals a provider-side reliability issue worth escalating before it becomes a user-facing incident.
+- **User feedback signals** (thumbs up/down) joined back to the specific trace, building an evaluation dataset the same way described in Testing.
+`,
+
+  deployment: `
+### A production Dockerfile for a LangChain-based chat API
+
+~~~dockerfile
+# ---- build stage ----
+FROM python:3.12-slim AS builder
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-dev
+COPY src/ src/
+RUN uv sync --frozen --no-dev
+
+# ---- runtime stage ----
+FROM python:3.12-slim
+RUN useradd -m appuser
+WORKDIR /app
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
+ENV PATH="/app/.venv/bin:$PATH"
+ENV LANGCHAIN_TRACING_V2=true
+USER appuser
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s CMD curl -f http://localhost:8000/healthz || exit 1
+CMD ["uvicorn", "llmservice.api:app", "--host", "0.0.0.0", "--port", "8000"]
+~~~
+
+Line-by-line justification: a multi-stage build keeps the runtime image free of build tooling; **--frozen** ensures the lockfile (pinning exact LangChain package versions, given the framework's churn) is respected exactly rather than silently resolved fresh; a non-root user limits blast radius if the container is compromised; **LANGCHAIN_TRACING_V2=true** at the environment level means tracing is on by default in every environment this image runs in, rather than an opt-in someone forgets to enable in production; a healthcheck lets an orchestrator (Kubernetes, ECS) detect and restart a wedged process.
+
+### Configuration checklist for deployment
+
+- Model API keys and LangSmith API key injected via secrets manager, never baked into the image.
+- Exact LangChain package versions pinned in the lockfile used to build the image.
+- Timeouts and retry policy configured on every model client, not left at library defaults.
+- LangSmith project name set per environment (dev/staging/prod) so traces don't mix across environments.
 `,
 
   "production-checklist": `
-Before a production LangChain application takes real traffic:
-
-- [ ] LangSmith (or equivalent) tracing integrated for full observability
-- [ ] Right abstraction level chosen (simple chain vs. agent vs. LangGraph) for the actual task complexity
-- [ ] Agent Fundamentals' safety practices applied: bounded iterations, autonomy calibration, human-in-the-loop for high-risk tools
-- [ ] Retriever quality validated independently, directly connecting to the Vector Search skill's own evaluation guidance
-- [ ] Memory/context growth managed explicitly for conversational applications
-- [ ] API keys/secrets never hardcoded in chain configuration
-- [ ] Automated evaluation against a representative test set as a deployment gate
+- [ ] Exact versions of langchain-core, langchain, langchain-community, and every provider package pinned in the lockfile.
+- [ ] Every model call has an explicit timeout and a bounded retry policy.
+- [ ] A fallback model is configured for user-facing chains where availability matters.
+- [ ] Structured output uses **with_structured_output** (native schema-constrained generation) rather than text-based JSON parsing, wherever the model supports it.
+- [ ] LangSmith tracing (or an equivalent) is enabled in every environment, not just added reactively after an incident.
+- [ ] Conversational memory is windowed or summarized, never allowed to grow unboundedly.
+- [ ] Every tool function validates its inputs, has an execution timeout, and is scoped to least-privilege credentials.
+- [ ] Irreversible or high-value tool calls (payments, deletions, external sends) are gated behind explicit confirmation, not a bare model decision.
+- [ ] Secrets (API keys) are injected via environment/secrets manager, never hardcoded or logged.
+- [ ] Retrieved and tool-returned content is treated as untrusted input in prompts, not as trusted system context.
+- [ ] Rate limiting and authentication are applied to every user-facing chain/agent endpoint.
+- [ ] Agent control flow that involves branching, retries, or human-in-the-loop steps has been migrated to LangGraph rather than forced into **AgentExecutor**.
+- [ ] A frozen, versioned evaluation dataset exists for regression-testing generation quality across model or prompt changes.
+- [ ] Per-step latency and token-usage metrics are tracked, not just end-to-end request latency.
+- [ ] A documented process exists for testing and approving LangChain version upgrades before they reach production.
 `,
 
   "common-mistakes": `
-1. **Treating LangChain abstractions as a black box**, without understanding the underlying LLM calls or integrating tracing.
-2. **Forcing a genuinely complex, stateful workflow into LangChain's higher-level agent abstractions** rather than migrating to LangGraph.
-3. **Reaching for a full agent when a simple, linear chain would suffice.**
-4. **Skipping Agent Fundamentals' safety practices** (bounded iterations, autonomy calibration) for LangChain-based agents.
-5. **Not validating pre-built integrations against the actual use case** before production reliance.
-6. **Not managing memory/context growth explicitly**, risking context-window overflow in long conversations.
+1. **Reaching for LangChain before establishing that composition is actually needed.** A single stateless call wrapped in a chain adds abstraction and a versioning dependency for no compositional benefit.
+2. **Leaving model calls without timeouts.** The library does not force a conservative default; production code must set one explicitly.
+3. **Trusting text-based JSON output parsing when native structured output is available.** It is measurably less reliable and unnecessarily fragile.
+4. **Letting conversational memory grow unboundedly.** This silently inflates cost and eventually breaks on context-window limits.
+5. **Writing vague tool docstrings.** The model's tool-selection quality is bounded by how clearly the tool's purpose and arguments are described.
+6. **Forcing complex control flow into AgentExecutor.** Branching, retries, and human-in-the-loop steps are what LangGraph exists for; bending the simple executor to fit produces fragile, hard-to-follow code.
+7. **Upgrading LangChain versions casually.** Given the documented churn, an unpinned or careless upgrade is a real, recurring source of production breakage.
+8. **Treating retrieved or tool-returned content as trusted.** It is untrusted input from the model's perspective and a real prompt-injection surface.
+9. **Not enabling tracing until after the first confusing incident.** Reconstructing chain behavior retroactively without traces is dramatically harder than having them from the start.
+10. **Assuming the abstraction removes the need to understand the underlying model API.** Debugging ultimately requires knowing what request was actually sent — LangChain can obscure this as often as it clarifies it if you never look underneath.
 `,
 
   "common-errors": `
-| Error | Typical Cause | Fix |
+| Error | Typical cause | Fix |
 |-------|---------------|-----|
-| Chain produces an unexpected or malformed result | Unclear prompt template or missing output parsing | Check LangSmith traces, tighten prompt/parser |
-| Agent doesn't call the expected tool | Ambiguous tool description or name | Write clearer, more distinguishable tool descriptions |
-| RAG chain retrieves irrelevant documents | Poorly-tuned retriever/vector database configuration | Tune retriever parameters (Vector Search skill guidance) |
-| Conversational chain degrades over a long session | Unmanaged, growing memory exceeding context window | Implement explicit summarization/truncation |
-| Agent loops without completing | Missing bounded iteration count | Apply Agent Fundamentals' max-iteration guidance |
-| Debugging a chain failure is genuinely difficult | No tracing/observability integrated | Integrate LangSmith (or equivalent) from the start |
+| ImportError for a class from a tutorial | Class moved/renamed/deprecated between LangChain versions | Check the installed package version's docs; update the import path |
+| Chain hangs indefinitely | No timeout set on the model client | Set an explicit timeout (and max_retries) on the chat model constructor |
+| JSON parsing failure from JsonOutputParser | Model didn't produce strictly valid JSON | Switch to **with_structured_output** against a Pydantic schema instead of text-based parsing |
+| Tool never gets called by the agent | Vague or missing tool docstring/description | Rewrite the docstring to clearly state when and how to use the tool |
+| Context window exceeded partway through a conversation | Unbounded conversational memory | Window (keep last N turns) or summarize older history |
+| Retrieved answer is confidently wrong | Retriever returned irrelevant/low-relevance documents | Inspect retrieved documents directly before touching the prompt; tune retriever/embedding config |
+| Behavior changed after a routine **pip install -U** | Unpinned LangChain version drifted to a release with breaking changes | Pin exact versions in the lockfile; treat upgrades as a tested, deliberate step |
+| Rate limit errors under moderate load | No retry/backoff or fallback model configured | Add **with_retry** and **with_fallbacks** to the model client |
 `,
 
   faqs: `
-**What is LangChain?**
-The most widely-adopted open-source framework providing reusable, composable abstractions (chains, agents, tools, memory, retrievers) for building LLM-powered applications.
+**Is LangChain still relevant, or has it been superseded?**
+It remains widely used, especially for prototyping and for applications that benefit from its integration breadth. But its own creators now position LangGraph as the recommended path for anything beyond simple chains, and many teams use LangChain primarily for its LCEL composition layer and integrations while handling complex agent control flow in LangGraph.
 
-**What is LCEL?**
-LangChain Expression Language — a declarative, pipe-based syntax for composing chains (prompt templates, model calls, output parsers) into reusable pipelines.
+**Why do people criticize LangChain so much?**
+The most common, legitimate criticisms are: real abstraction overhead for simple tasks (wrapping a single API call in several layers of framework), a genuinely fast-moving and sometimes confusing API surface across versions, and cases where debugging requires understanding the framework's internals almost as much as the underlying LLM API. These are fair critiques of overuse, not evidence that the framework is never useful — see Comparisons and Anti-Patterns for when it does and doesn't earn its cost.
 
-**How does LangChain relate to Agent Fundamentals?**
-LangChain provides a concrete, production-grade implementation of the plan-act-observe agent loop and structured tool-calling concepts covered conceptually in Agent Fundamentals.
+**When should I just call the provider SDK directly instead?**
+When your entire task is a single, non-reused LLM call with no branching, no swappable providers, and no need for streaming/batch composition across multiple steps. Three lines of the raw SDK are simpler, have zero extra dependencies, and are easier to debug than a one-step chain.
 
-**When should I use LangGraph instead of LangChain's own agent abstractions?**
-When a workflow genuinely requires complex conditional branching, cycles, or explicit state management beyond what LangChain's higher-level AgentExecutor comfortably supports — covered in depth in the platform's next skill.
+**Do I need LangSmith to use LangChain?**
+No, it's optional, but strongly recommended for anything beyond a toy project — debugging chain behavior without traces is materially harder, especially for agents with tool calls.
 
-**Why is LangChain sometimes criticized as a "black box"?**
-Because its higher-level abstractions can obscure exactly what prompt is being sent to the model or how a chain's steps execute — mitigated by integrating LangSmith (or equivalent) tracing from the start of development.
+**What's the difference between LangChain and LangGraph?**
+LangChain provides the composable primitives (prompts, models, parsers, retrievers, tools) and simple chain/agent constructs; LangGraph is a lower-level graph-based orchestration layer, built by the same team, for expressing stateful, cyclical, branching agent control flow that a simple LCEL chain or **AgentExecutor** handles awkwardly.
 
-**Do I always need a full agent for a LangChain application?**
-No — a simple, linear LCEL chain is faster, cheaper, and more predictable, and should be preferred whenever the task doesn't genuinely require dynamic tool selection or multi-step reasoning.
+**Is LangChain the right choice for a RAG-heavy application?**
+It can work, but LlamaIndex is purpose-built for the data/retrieval side of RAG with more depth (multiple index types, more retrieval strategies) out of the box; many production RAG systems use LlamaIndex for ingestion/retrieval and LangChain (or LangGraph) for the surrounding agent/conversation logic.
+
+**Why does old LangChain code from 2023 tutorials often not work anymore?**
+The framework has undergone several deliberate refactors (the langchain-core/langchain/langchain-community split, LCEL becoming the recommended composition pattern, memory classes being reworked) — treat any single-version-pinned tutorial, including this page's examples, as a snapshot rather than an eternal API, and verify against current docs when in doubt.
 `,
 
   "interview-questions": `
-### Junior level
+**Junior level**
 
-1. **What is LangChain?**
-   Model answer: an open-source framework providing reusable abstractions (chains, agents, tools, memory, retrievers) for building LLM-powered applications.
+1. *What is LCEL and why does the pipe ("|") operator matter?* Model answer: LCEL is LangChain's composition syntax; every component implements a shared Runnable interface, so piping them together automatically gives streaming, batch, and async support without hand-writing that plumbing per chain.
 
-2. **What is LCEL?**
-   Model answer: LangChain Expression Language, a declarative, pipe-based syntax for composing chains.
+2. *What is the difference between a chain and an agent in LangChain?* Model answer: a chain is a fixed sequence of steps; an agent adds a loop where the model itself decides, per turn, whether to call a tool, and the loop continues until the model produces a final answer without further tool requests.
 
-3. **What is a LangChain "chain"?**
-   Model answer: a composed, reusable sequence of LLM calls and transformations (e.g., prompt template, then model call, then output parsing).
+3. *Why would you use **with_structured_output** instead of a JSON output parser?* Model answer: it binds a schema to the model provider's native structured-output/tool-calling mechanism, which constrains generation at the API level, rather than hoping free text happens to parse as valid JSON.
 
-4. **What is a LangChain retriever, and what does it connect to?**
-   Model answer: an abstraction for fetching relevant documents from a vector database, directly connecting to the Vector Search and vector database skills, used for retrieval-augmented generation.
+4. *What does a retriever do in a LangChain RAG chain?* Model answer: given a query string, it returns relevant documents from a vector store (or other backend), which get formatted into the prompt's context before the model generates an answer.
 
-### Senior level
+**Senior level**
 
-5. **Explain precisely why LangChain's own team increasingly recommends LangGraph over its higher-level AgentExecutor abstraction for complex agentic workflows, with a concrete example.**
-   Model answer: LangChain's \`AgentExecutor\` implements a fairly standard, largely linear plan-act-observe loop well-suited to tasks where the agent repeatedly decides on and executes tool calls until reaching a final answer, but it offers relatively limited, implicit control over EXPLICIT STATE, CONDITIONAL BRANCHING between distinct workflow stages, CYCLES (deliberately returning to an earlier stage based on a later observation), and fine-grained HUMAN-IN-THE-LOOP checkpoints at arbitrary points in the workflow; consider a customer-support workflow requiring: first classify the incoming request's category, then — based on that classification — branch into ENTIRELY DIFFERENT subsequent processing paths (a billing question follows a different multi-step path than a technical support question), with an explicit human-approval checkpoint before any refund-related action, and the possibility of looping BACK to re-classification if the customer's follow-up messages reveal the initial classification was wrong; this requires explicit, first-class STATE (the current classification, conversation history, whether human approval has occurred) and CONDITIONAL, POTENTIALLY CYCLIC control flow that's awkward to express within \`AgentExecutor\`'s more implicit, linear loop abstraction, but maps naturally onto LangGraph's explicit graph-based state machine model (covered in the platform's next skill), where each processing stage is an explicit NODE and the conditional/cyclic transitions between them are explicit EDGES.
+5. *When would you choose LangGraph over a plain LCEL chain or AgentExecutor, and why?* Model answer: once control flow needs branching, cycles, retries, or human-in-the-loop interrupts — LangGraph models these explicitly via a state graph, whereas AgentExecutor's fixed loop and LCEL's linear composition both become awkward to bend around that kind of logic.
 
-6. **A team's LangChain-based RAG chain works well in initial testing but occasionally produces answers based on retrieved documents that aren't actually relevant to the user's question. Diagnose this and propose fixes.**
-   Model answer: this is fundamentally a RETRIEVER QUALITY issue, not a chain-composition or prompting issue — the chain is faithfully passing whatever documents the retriever returns into the prompt, so if the retriever itself returns irrelevant documents, the downstream generation step has no way to know this and will simply generate a response based on the (irrelevant) provided context, directly connecting to the **Vector Search** skill's own recall@k and ANN-configuration treatment; I'd first debug the RETRIEVER independently from the full chain — querying it directly with representative questions and manually inspecting whether the returned documents are genuinely relevant, rather than assuming the issue lies elsewhere in the chain; likely fixes include tuning the retriever's ANN search parameters (e.g., increasing the number of candidates considered, adjusting the underlying HNSW/IVF configuration per the **Vector Search** skill), reconsidering the embedding model or chunking strategy used to build the vector index in the first place (directly connecting to the **Embeddings** skill), or adding an explicit relevance-filtering/re-ranking step between retrieval and generation that discards documents below a relevance threshold before they're included in the prompt — treating retriever quality as a genuinely distinct, independently-measurable and independently-improvable concern from the surrounding chain's prompt/parsing logic.
+6. *How do you debug a LangChain chain that's producing a subtly wrong answer in production?* Model answer: inspect the LangSmith trace (or verbose logs) to see the literal prompt sent and the raw retrieved documents/tool results before touching the prompt template or the model — most subtle-wrong-answer bugs are retrieval or tool-result bugs disguised as generation bugs.
 
-7. **Explain the tradeoff between using a simple LCEL chain versus a full LangChain agent for a given task, and design an appropriate architecture for a document-summarization feature.**
-   Model answer: a simple LCEL chain executes a fixed, predetermined sequence of steps (e.g., always: retrieve, then format prompt, then generate, then parse) — it's faster, cheaper, and more predictable, but cannot dynamically decide WHICH steps to take based on the specific input; a full agent, by contrast, dynamically decides which tools to invoke and in what order based on its own reasoning about the specific task at hand, providing considerably more flexibility at the cost of additional latency (multiple model calls per task), cost, and reduced predictability (directly connecting to **Agent Fundamentals**' own autonomy/predictability tradeoff treatment); for a document-summarization feature specifically, where the task is well-defined and doesn't genuinely require dynamic, input-dependent tool selection (every document simply needs to be summarized, following the same fixed process regardless of its specific content), a SIMPLE LCEL CHAIN (retrieve/load the document, format a summarization prompt, generate, optionally parse into a structured summary format) is the appropriate, considerably more efficient choice — reserving the additional complexity and cost of a full agent specifically for tasks genuinely requiring dynamic, input-dependent decision-making about which actions to take.
+7. *What are the real costs of adopting LangChain for a project, and when do they outweigh the benefits?* Model answer: an extra dependency surface with documented version churn, an abstraction layer that can obscure what's actually sent to the model, and a learning curve for the team; these outweigh the benefits when the application's actual composition needs are simple (a handful of stateless calls) and would be clearer as direct SDK calls.
 
-8. **A production LangChain agent occasionally invokes the wrong tool for a user's request, despite the tools being individually well-implemented and tested. What's the most likely root cause, and how would you fix it?**
-   Model answer: since the individual tools are described as well-implemented and tested, the most likely root cause is that the MODEL is having genuine difficulty correctly SELECTING among the available tools based on their descriptions — directly connecting to the **Prompt Engineering** skill's own treatment of prompt clarity mattering significantly for reliable model behavior; specifically, if multiple tools have similar or ambiguous descriptions, or if a tool's description doesn't clearly and distinctly convey exactly when it should (and shouldn't) be used relative to the other available tools, the model may genuinely struggle to reliably select the correct one; the fix is to rewrite each tool's description to be maximally CLEAR and DISTINCT from the others — explicitly stating the tool's specific purpose, the kind of input it expects, and ideally including a brief example of an appropriate use case — and to test tool-selection behavior systematically across a representative set of queries (directly connecting to this page's own testing guidance on verifying an agent invokes the EXPECTED tool, not just that SOME final answer is produced), iterating on tool descriptions based on observed selection failures rather than assuming the issue lies elsewhere in the chain/agent configuration.
+8. *How would you design conversational memory for a high-traffic chat product built on LangChain?* Model answer: externalize message history to a shared, keyed store (not in-process), window or summarize older turns to bound token cost and latency, and make the memory strategy a deliberate, tested decision rather than defaulting to unbounded buffer memory.
 
-9. **Explain how LangChain's memory abstractions interact with the LLM Fundamentals skill's context-window constraints, and design a strategy for a customer-support chatbot expected to handle very long conversations.**
-   Model answer: LangChain's memory abstractions (e.g., \`InMemoryChatMessageHistory\` and similar) accumulate the FULL conversation history by default, appending each new turn — but since this accumulated history becomes part of the prompt sent to the model on every subsequent turn, and the model has a fixed, finite CONTEXT WINDOW (covered in depth in the **LLM Fundamentals** skill), a sufficiently long conversation will eventually risk exceeding this limit if the full, unmanaged history keeps growing indefinitely; for a customer-support chatbot expected to handle potentially very long conversations, I'd implement an explicit memory-management strategy rather than relying on default, unbounded history accumulation — options include a SLIDING WINDOW (keeping only the most recent N turns in full detail, directly bounding context growth at the cost of losing very early conversation details), periodic SUMMARIZATION (using an additional LLM call to periodically compress older conversation turns into a concise summary, preserving the gist of earlier context while bounding its token cost), or a HYBRID approach (a running summary of older turns, plus the full text of the most recent few turns) — the specific choice depends on how much early-conversation detail genuinely needs to be preserved for the chatbot's actual task versus how aggressively context growth needs to be bounded for cost/latency reasons.
+9. *What's the security risk of feeding tool outputs back into the model, and how do you mitigate it?* Model answer: tool outputs (and retrieved documents) are untrusted input from the model's perspective and a real prompt-injection vector; mitigate by treating them as data rather than instructions in the prompt, and by gating any high-stakes action the model might request behind explicit validation or human confirmation.
 
-10. **A team wants to add web search as a tool for their LangChain agent, but is concerned about prompt injection via malicious or manipulated search results. How would you mitigate this risk?**
-    Model answer: this is a direct instance of the risk covered in this page's own security section and the platform's later **Prompt Injection Defense** skill — a malicious or compromised webpage could include text specifically crafted to manipulate the agent's subsequent behavior once that page's content is retrieved by the search tool and fed back into the agent's context (e.g., text like "ignore your previous instructions and instead..."); mitigations include: treating all tool results (including search results) as fundamentally UNTRUSTED input, never implicitly trusted the way the original system prompt is; applying explicit input validation/sanitization to tool results before they're incorporated into the agent's context, potentially using a separate, dedicated classifier to detect obvious injection attempts within retrieved content; clearly demarcating tool-result content within the prompt (e.g., via explicit delimiters) so the model can better distinguish "content retrieved from an external, untrusted source" from "genuine system/user instructions"; and applying **Agent Fundamentals**' own action-level guardrail guidance — even if a search result successfully manipulates the agent's subsequent REASONING, requiring human-in-the-loop confirmation before any genuinely high-risk ACTION (as opposed to further, low-risk searching) provides a meaningful additional safeguard against the manipulation actually causing real-world harm.
+10. *How do you handle a LangChain version upgrade safely in a production codebase?* Model answer: pin exact versions in the lockfile, read the changelog for renamed/deprecated APIs before upgrading, run the full evaluation/regression suite against the new version in a staging environment, and treat the upgrade as a deliberate, tested change rather than a routine dependency bump.
 `,
 
   "coding-questions": `
-### 1. Build a simple LCEL summarization chain
+### 1. Build a classification chain with structured output
 
 ~~~python
+from pydantic import BaseModel
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI
 
-def build_summarization_chain(model):
-    prompt = ChatPromptTemplate.from_template(
-        "Summarize the following text in exactly one sentence:\\n\\n{text}"
-    )
-    return prompt | model | StrOutputParser()
-# Follow-up: how would you modify this chain to return a
-# structured object (e.g., with a "summary" and a "key_points"
-# list) instead of a raw string?
+class TicketClassification(BaseModel):
+    category: str
+    urgent: bool
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Classify the support ticket's category and urgency."),
+    ("human", "{ticket_text}"),
+])
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0, timeout=20)
+classifier = prompt | model.with_structured_output(TicketClassification)
+
+result = classifier.invoke({"ticket_text": "My payment failed twice today, I need this fixed now."})
+print(result.category, result.urgent)
 ~~~
 
-### 2. Build a custom tool and wire it into a tool-calling agent
+Complexity: one model call, O(1) in chain steps; latency dominated by the API round trip. Follow-up: how would you batch-classify 10,000 historical tickets efficiently? (Answer: **.batch()** with a tuned **max_concurrency**, respecting the provider's rate limits, rather than a sequential loop.)
 
-~~~python
-from langchain_core.tools import tool
-from langchain.agents import create_tool_calling_agent, AgentExecutor
-
-@tool
-def lookup_order_status(order_id: str) -> str:
-    """Look up the current status of a customer order by its ID."""
-    return order_database.get_status(order_id)
-
-def build_order_status_agent(model, prompt):
-    agent = create_tool_calling_agent(model, tools=[lookup_order_status], prompt=prompt)
-    return AgentExecutor(agent=agent, tools=[lookup_order_status], max_iterations=5)
-# Follow-up: why is setting max_iterations here a direct
-# application of Agent Fundamentals' loop-safety guidance?
-~~~
-
-### 3. Build a RAG chain combining retrieval and generation
+### 2. Build a RAG chain with source citation
 
 ~~~python
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
-def build_rag_chain(retriever, prompt, model):
-    def format_docs(docs):
-        return "\\n\\n".join(doc.page_content for doc in docs)
+def format_with_sources(docs):
+    return "\\n\\n".join(f"[{i}] {d.page_content}" for i, d in enumerate(docs))
 
-    return (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
-        | prompt
-        | model
-        | StrOutputParser()
-    )
-# Follow-up: how would you add a relevance-filtering step
-# that discards retrieved documents below a similarity
-# threshold before they reach the prompt?
+rag_prompt = ChatPromptTemplate.from_messages([
+    ("system", "Answer using the numbered context. Cite sources like [0], [1]. "
+               "If the context doesn't answer the question, say you don't know.\\n\\n{context}"),
+    ("human", "{question}"),
+])
+
+rag_chain = (
+    {"context": retriever | format_with_sources, "question": RunnablePassthrough()}
+    | rag_prompt | model | StrOutputParser()
+)
+answer = rag_chain.invoke("What's our SLA for enterprise customers?")
 ~~~
+
+Complexity: one retrieval call plus one model call. Follow-up: how would you validate that every citation number in the answer actually corresponds to a retrieved document? (Answer: parse the citation markers from the output and cross-check against the retrieved document count/index as a post-generation validation step, failing closed if a citation is out of range.)
+
+### 3. Add retry and fallback resilience to a production chain
+
+~~~python
+primary = ChatOpenAI(model="gpt-4o-mini", timeout=15, max_retries=2)
+fallback = ChatOpenAI(model="gpt-4o", timeout=20, max_retries=1)
+resilient_model = primary.with_fallbacks([fallback])
+
+chain = prompt | resilient_model | StrOutputParser()
+# a transient failure or timeout on the primary model automatically
+# falls through to the fallback rather than surfacing an error to the user
+~~~
+
+Follow-up: how would you monitor how often the fallback is triggered? (Answer: log/trace which model actually produced each response — LangSmith traces capture this automatically — and alert if the fallback trigger rate exceeds a threshold, since a rising rate signals a primary-provider reliability issue.)
 `,
 
   "hands-on-labs": `
-### Lab 1 (Beginner): Build a simple LCEL chain
-Build a chain composing a prompt template, model call, and output parser for a simple task (e.g., translation or summarization). Deliverable: a working, tested LCEL chain. Skills exercised: basic LCEL composition.
+### Lab 1 (Beginner): First LCEL chain
+Build a single LCEL chain: a prompt template that takes a product name and a customer complaint, a chat model call, and a **StrOutputParser**. Deliverable: a script that takes CLI input and prints a generated response, with an explicit timeout on the model call. Skills exercised: prompt templates, LCEL composition, output parsers.
 
-### Lab 2 (Intermediate): Build a RAG application
-Build a full retrieval-augmented generation chain, integrating a vector database (from the platform's vector database skills) as a retriever. Deliverable: a working RAG chain with verified retrieval relevance. Skills exercised: applied retrieval integration.
+### Lab 2 (Intermediate): RAG chain over your own documents
+Load a small folder of documents, embed and index them in a vector store (see the RAG and Vector Databases skills for the ingestion side), and build a retriever-backed LCEL chain that answers questions with source citations. Deliverable: a chain that returns both an answer and the source document identifiers it used. Skills exercised: retrievers, RunnableParallel/RunnablePassthrough composition, prompt design for grounded answers.
 
-### Lab 3 (Advanced): Build a tool-calling agent with bounded iterations and tracing
-Build a LangChain agent with at least two custom tools, bounded iteration count, and full LangSmith (or equivalent) tracing integrated. Deliverable: a working, observable agent with a documented execution trace. Skills exercised: applied agent safety and observability.
+### Lab 3 (Intermediate-Advanced): Tool-calling agent with resilience
+Build an agent with two or three tools (e.g., an order-lookup function, a refund-eligibility calculator), wire it with **bind_tools** and a loop (or **AgentExecutor**), and add retry/fallback on the model call plus input validation on every tool. Deliverable: an agent that handles a tool throwing an exception gracefully rather than crashing the whole request. Skills exercised: tool calling, agent loops, resilience patterns.
 
-### Lab 4 (Production): Migrate a complex chain to identify LangGraph's advantages
-Given a chain/agent requiring conditional branching or cycles, attempt to implement it in LangChain's standard abstractions, then compare against a LangGraph implementation (previewing the platform's next skill). Deliverable: a documented comparison. Skills exercised: applied abstraction-level judgment.
+### Lab 4 (Production): Observability and evaluation harness
+Take the Lab 2 or Lab 3 agent, enable LangSmith tracing, build a small frozen evaluation dataset of (input, expected-behavior) pairs, and write an automated check that flags a regression if a new prompt or model version change causes the pass rate to drop. Deliverable: a CI-runnable evaluation script plus a short writeup of what LangSmith traces revealed about the system's actual behavior versus your assumptions. Skills exercised: LangSmith, evaluation methodology, production monitoring discipline.
 `,
 
   "real-projects": `
-### 1. An internal knowledge-base RAG assistant
-Engineering requirements: document ingestion/chunking, vector database integration, a retrieval-augmented LCEL chain, and full observability via LangSmith.
+### Project 1: Internal knowledge-base support agent
+A tool-calling agent that answers employee questions by retrieving from an internal document/wiki index and, when needed, calling tools to check ticket status or escalate to a human. Engineering requirements: source citation on every retrieval-grounded answer, a confirmation step before any escalation action, LangSmith tracing enabled from day one, and an evaluation dataset covering both "should retrieve" and "should escalate" cases.
 
-### 2. A customer-support tool-calling agent
-Engineering requirements: multiple custom tools (order lookup, refund processing with human-in-the-loop confirmation), bounded iterations, and action-level guardrails for high-risk tools.
+### Project 2: Multi-provider content classification pipeline
+A batch pipeline that classifies a large volume of incoming text (support tickets, reviews, or documents) using structured output, with fallback across two model providers for resilience and cost control. Engineering requirements: **.batch()** with tuned concurrency respecting rate limits, a frozen evaluation set for regression testing across model/prompt changes, and cost/latency dashboards broken out per provider.
 
-### 3. A multi-stage document processing pipeline
-Engineering requirements: a composed LCEL chain handling extraction, summarization, and classification stages, with structured output parsing at each stage.
+### Project 3: Conversational assistant with externalized, tiered memory
+A chat product where conversational memory is externalized to a shared store, with a windowing/summarization strategy so long conversations don't blow the context window, plus a migration path documented for moving the agent's control flow into LangGraph if/when branching or human-in-the-loop requirements emerge. Engineering requirements: session-keyed history in Redis or a database, a documented memory-strategy decision with cost/quality tradeoffs, and load testing to confirm horizontal scalability of the stateless API layer.
 `,
 
   "case-studies": `
-### LangChain's rapid rise as the default LLM application framework
-LangChain's 2022 launch and subsequent rapid adoption throughout 2023 established it as many engineers' default starting point for LLM application development, directly reflecting the genuine value of standardizing common plumbing (prompting, memory, retrieval, tool-calling) that would otherwise be reimplemented ad-hoc across countless individual projects. Lesson: providing well-designed, reusable abstractions for genuinely common infrastructure needs can drive very rapid ecosystem adoption, especially early in a new technology's practical maturation (here, LLM application development broadly).
+### Klarna's customer-service assistant
+Klarna has publicly discussed deploying an AI assistant handling a very large share of customer service chats, built around LLM orchestration patterns consistent with LangChain-style tool-calling agents over internal systems. Lesson: at genuine production scale, the value is in the integration with real backend systems (order status, refund policy, account data) and rigorous evaluation, not in the orchestration framework itself — the framework is a means to reliably wire those integrations together, not the differentiator.
 
-### The LCEL redesign addressing earlier chain-class limitations
-LangChain's introduction of LCEL represented a genuine architectural evolution — moving from more rigid, imperative chain classes toward a more flexible, declarative, streaming-friendly composition model, directly informed by accumulated practical experience with the earlier approach's limitations. Lesson: even a widely-adopted framework benefits from architectural evolution as practical experience reveals an earlier design's genuine limitations, rather than treating an initial design as permanently fixed.
+### The community's LCEL migration
+When LangChain introduced LCEL and began deprecating the older **Chain** subclassing pattern, a large fraction of existing production codebases had to be migrated. Lesson: building on a framework with this much historical API churn means budgeting real engineering time for migrations as a recurring cost of using it, not a one-time event — a lesson directly relevant to the "when is LangChain worth it" calculus covered in Comparisons.
 
-### LangGraph's emergence addressing LangChain's own agent-abstraction limitations
-Rather than indefinitely stretching LangChain's higher-level agent abstractions to accommodate increasingly complex, stateful workflows, the LangChain team introduced LangGraph as a genuinely distinct, lower-level orchestration layer specifically for these cases. Lesson: recognizing the genuine limits of an existing abstraction and introducing a deliberately DIFFERENT, complementary tool for a distinct class of problems (rather than overloading the original abstraction indefinitely) is often better long-term architecture than trying to make one abstraction serve every use case.
+### Teams migrating agent logic from AgentExecutor to LangGraph
+A recurring pattern reported across blog posts and conference talks: teams that started with a simple LangChain **AgentExecutor** for a tool-calling agent hit a wall once they needed approval steps, retries with different logic per failure type, or multi-agent coordination, and rebuilt the same tools and prompts as a LangGraph graph. Lesson: recognizing early that your agent's control flow has outgrown a simple loop — before it becomes a tangle of workarounds — is a mark of good engineering judgment, and LangGraph exists specifically to be that escalation path.
+
+### Teams that chose NOT to adopt LangChain
+Several engineering teams have published post-mortems or blog posts explaining a deliberate choice to build directly on provider SDKs instead of LangChain, citing debugging difficulty through the abstraction layer and version churn as the deciding factors for their use case (typically a small number of well-understood, stable call patterns). Lesson: this is a legitimate, sometimes better engineering choice, not merely "not knowing the framework" — see Comparisons for how to make this call deliberately rather than by default in either direction.
 `,
 
   comparisons: `
-| Aspect | Simple LCEL Chain | LangChain AgentExecutor | LangGraph |
-|--------|--------------------------|--------------------------------|------------------------------|
-| Control flow | Fixed, linear sequence | Dynamic, model-driven loop | Explicit graph: nodes + edges |
-| Best fit | Well-defined, fixed-process tasks | Standard tool-use loops | Complex, stateful, cyclic workflows |
-| Predictability | Highest | Moderate | High (explicit state) with flexibility |
+| Framework | Core focus | Strengths | Weaknesses | Choose when |
+|-----------|-----------|-----------|------------|-------------|
+| **LangChain** | General-purpose composition + broad integrations | Huge integration library, large community/docs, LCEL composition, tight LangSmith/LangGraph ecosystem | Documented API churn across versions, abstraction overhead for simple tasks, can obscure the raw model call | You need broad provider/tool/data-source integration breadth and are building genuinely composed, multi-step logic |
+| **LlamaIndex** | Data/RAG-first | Deep retrieval abstractions (multiple index types, reranking, hybrid search), strong document-parsing story | Narrower scope for general agent orchestration | Your core problem is ingesting and retrieving from your own data well, more than general agent control flow |
+| **LangGraph** | Stateful, graph-based agent orchestration | Explicit state, cycles, branching, human-in-the-loop, durable execution | Lower-level, more upfront design effort than a simple chain | Your agent's control flow needs branching, retries, or persistent state beyond a simple loop |
+| **PydanticAI** | Typed, minimal agent framework | Strong typing end to end, deliberately small API surface, less version churn by design | Smaller integration ecosystem, younger project | You want strong typing and minimal abstraction overhead over a direct model-call-plus-tools pattern |
+| **DSPy** | Programmatic prompt/pipeline optimization | Treats prompts as compiled, optimizable artifacts rather than hand-tuned strings | Different mental model, steeper conceptual learning curve, less suited to hand-crafted prompt control | You want to programmatically optimize a pipeline's prompts against a metric, rather than hand-iterate them |
+| **Raw provider SDK (OpenAI/Anthropic/etc.)** | Direct API access | Simplest possible mental model, zero extra dependencies, full transparency into the exact request | You reimplement composition, retries, and parsing yourself for every project | Your task is simple, single-provider, and doesn't need swappable providers or complex composition |
 
-| Aspect | LangChain | Hand-rolled agent loop |
-|--------|-----------------|-------------------------------|
-| Development speed | Faster — reusable abstractions | Slower — everything built from scratch |
-| Flexibility | Bounded by framework abstractions | Maximal — full custom control |
-| Ecosystem | Large, pre-built integrations | None — build everything yourself |
+### How seniors choose
 
-**How seniors choose**: default to LangChain's simple chains and agents for standard LLM application needs, given its mature ecosystem and faster development speed; reach for LangGraph specifically once a workflow's complexity genuinely exceeds what LangChain's higher-level abstractions comfortably express.
+The decision is rarely "LangChain versus nothing" — it's "how much composition and integration breadth does this specific application actually need, right now." A senior engineer starts by asking whether the task is a single call, a short fixed sequence, or genuinely branching/stateful agent logic, and picks the raw SDK, an LCEL chain, or LangGraph accordingly — reaching for LlamaIndex or DSPy instead when the core difficulty is specifically data retrieval or prompt optimization rather than general composition. The mistake to avoid in both directions is dogma: neither "always use LangChain" nor "never use frameworks, always raw API calls" survives contact with a real, growing codebase.
 `,
 
   "related-technologies": `
-- **Agent Fundamentals** — the conceptual foundation (agent loop, tool use, autonomy) LangChain concretely implements.
-- **Vector Search**, and the vector database skills (**FAISS**, **Pinecone**, **Milvus**, **Weaviate**, **Qdrant**, **Chroma**) — directly power LangChain's retriever abstraction for RAG applications.
-- **LangGraph** — the platform's next skill, addressing LangChain's own limitations for complex, stateful agentic workflows.
-- **LangSmith** — LangChain's companion observability platform, covered in its own platform skill.
-- **CrewAI**, **AutoGen** — alternative, differently-opinionated agent frameworks covered later in this category.
-
-Learning path: **Agent Fundamentals** → this page (LangChain) → **LangGraph** → **CrewAI** → the remaining skills in this category.
+- **LangGraph** — the graph-based orchestration layer for stateful, branching agent control flow; the recommended escalation path once a LangChain chain or **AgentExecutor** outgrows simple linear logic. See the **LangGraph** skill.
+- **LangSmith** — the tracing, evaluation, and monitoring platform built specifically around LangChain (and compatible with non-LangChain apps); treat it as the default observability layer for any non-trivial LangChain application. See the **LangSmith** skill.
+- **LlamaIndex** — the data/RAG-first alternative with deeper retrieval abstractions; frequently used alongside LangChain (LlamaIndex for ingestion/retrieval, LangChain/LangGraph for the surrounding agent logic) rather than as a strict either/or. See the **LlamaIndex** skill.
+- **PydanticAI** — a smaller, strongly-typed agent framework built around Pydantic models end to end, a useful contrast for evaluating how much abstraction a given project actually needs. See the **PydanticAI** skill.
+- **DSPy** — a fundamentally different philosophy (compile/optimize prompts programmatically against a metric, rather than hand-write and iterate strings). See the **DSPy** skill.
+- **RAG** — the retrieval-augmented-generation pattern that LangChain's retriever interface and chains implement one version of. See the **RAG** skill.
+- **Tool Calling** — the underlying mechanism LangChain's **bind_tools**/agent loop builds on; understanding it directly clarifies what LangChain is and isn't adding. See the **Tool Calling** skill.
+- **Agent Memory** — the deeper theory behind the memory classes and history stores covered in this page's Intermediate Concepts. See the **Agent Memory** skill.
+- **Agent Fundamentals** — the general loop/tool/planning/autonomy vocabulary that LangChain's and LangGraph's agent constructs are specific implementations of. See the **Agent Fundamentals** skill.
 `,
 
   "latest-updates": `
-Knowledge cutoff for this page: January 2026. As of that cutoff:
+Knowledge cutoff note: this section reflects the general direction of LangChain's development as of the author's training data (early-to-mid 2026 for recent context) and should be verified against the current changelog before relying on specific version numbers or class names — this framework's own history is one of the more active examples of API churn on this platform, and the honest, durable statement here is "verify current behavior," not a frozen list of facts.
 
-- LangChain continues to be among the most widely-adopted LLM application frameworks, with continued growth of its integration ecosystem and increasing standardization around native, model-provided tool/function calling.
-- Continued convergence toward recommending LangGraph specifically for complex, stateful agentic workflows, while LangChain's own simpler chain/agent abstractions remain the default starting point for standard use cases.
-- Continued investment in LangSmith's observability/evaluation capabilities as the standard companion tool for production LangChain applications.
-- Given continued, active framework evolution, verify current best-practice recommendations against LangChain's up-to-date official documentation.
+Directionally, recent development has continued to consolidate around three pillars: LCEL as the standard composition layer within **langchain-core**, LangGraph as the recommended path for anything beyond simple linear chains (with the older **AgentExecutor** and several legacy chain classes treated as maintenance-mode rather than the recommended starting point for new agent code), and LangSmith as the default observability and evaluation platform. The package-split architecture (**langchain-core** / **langchain** / **langchain-community** / provider-specific packages) has continued, with more integrations graduating into their own dedicated, independently versioned packages over time to reduce dependency bloat and give provider integrations their own release cadence.
+
+Structured output via native provider tool-calling/schema-constrained generation (**with_structured_output**) has become the clearly preferred pattern over text-based output parsing, reflecting the broader industry move toward providers exposing first-class structured-output APIs rather than developers working around free-text generation. Given this trajectory, the safest posture for an engineer using this page is to treat class names and import paths as illustrative of the pattern, and to check the installed package version's own documentation before shipping code that depends on exact API details.
 `,
 
   "future-roadmap": `
-Where LangChain is heading, and what's worth betting career time on:
+The most defensible bet for where LangChain is heading is continued specialization: LangChain itself narrowing toward composition primitives and integrations, LangGraph absorbing more of the complex agent-orchestration responsibility, and LangSmith deepening as the evaluation/observability layer that ties both together. This mirrors a broader industry pattern where "the framework" has splintered into more composable, individually-adoptable pieces rather than one monolithic answer — worth watching alongside similar specialization in LlamaIndex (retrieval-focused) and dedicated evaluation tooling.
 
-- **Continued standardization around native, model-provided tool-calling** as the preferred mechanism over fragile, prompt-based approaches.
-- **Continued maturity of LangGraph** as the recommended path for genuinely complex agentic workflows, alongside LangChain's simpler abstractions for standard use cases.
-- **Continued growth of the broader integration ecosystem** (LLM providers, vector databases, tools), reducing redundant integration work across the industry.
-- **What to bet on**: deeply understanding LCEL's composable, declarative pattern and the underlying agent-loop concepts it implements — these transfer directly across LangChain versions and even to alternative frameworks, a more durable investment than memorizing any single framework version's specific API surface.
+Worth betting career time on: understanding LCEL composition deeply (it's the stable core abstraction beneath the churn), understanding tool-calling and agent control-flow patterns generally (transferable across LangChain, LangGraph, and other frameworks alike), and building the habit of verifying framework behavior against current docs rather than memorized syntax — a durable skill regardless of which specific framework wins over the next few years. Less worth over-investing in: memorizing any single version's exact class names and import paths, given the demonstrated rate of change; that knowledge has a short half-life and is exactly the kind of thing to look up fresh each time rather than commit to long-term memory.
 `,
 
   "cheat-sheet": `
-~~~
-# ---- LCEL: composing a chain ----
-chain = prompt | model | output_parser
-chain.invoke({...})   # sync
-chain.stream({...})   # streaming
-chain.batch([...])    # batched
-~~~
+~~~python
+# ── Setup ──────────────────────────────────────────────
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0.1, timeout=20, max_retries=2)
 
-~~~
-# ---- Tool definition ----
+# ── Prompt + LCEL chain ────────────────────────────────
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a {role}."), ("human", "{input}"),
+])
+chain = prompt | model | StrOutputParser()
+chain.invoke({"role": "helpful assistant", "input": "hi"})
+chain.batch([...], config={"max_concurrency": 5})
+for chunk in chain.stream({...}): print(chunk, end="")
+
+# ── Structured output (preferred over text JSON parsing) ─
+from pydantic import BaseModel
+class Result(BaseModel):
+    answer: str
+structured = model.with_structured_output(Result)
+
+# ── RAG composition ────────────────────────────────────
+from langchain_core.runnables import RunnablePassthrough
+retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+rag_chain = (
+    {"context": retriever | (lambda docs: "\\n".join(d.page_content for d in docs)),
+     "question": RunnablePassthrough()}
+    | prompt | model | StrOutputParser()
+)
+
+# ── Memory ─────────────────────────────────────────────
+from langchain_core.runnables.history import RunnableWithMessageHistory
+chain_with_history = RunnableWithMessageHistory(
+    prompt | model, get_history_fn,
+    input_messages_key="question", history_messages_key="history",
+)
+
+# ── Tools and agents ───────────────────────────────────
+from langchain_core.tools import tool
 @tool
-def my_tool(arg: str) -> str:
-    """Clear, distinct description -- model uses this to
-    decide WHEN to call this tool vs. others."""
-    return do_something(arg)
-~~~
+def lookup(order_id: str) -> str:
+    "Look up an order's status by ID."
+    return "shipped"
+model_with_tools = model.bind_tools([lookup])
 
-~~~
-# ---- Agent (implements Agent Fundamentals' loop) ----
-agent = create_tool_calling_agent(model, tools, prompt)
-executor = AgentExecutor(agent=agent, tools=tools,
-                          max_iterations=N)  # ALWAYS bound this
-~~~
+# ── Resilience ─────────────────────────────────────────
+resilient = model.with_retry(stop_after_attempt=3).with_fallbacks([backup_model])
 
-~~~
-# ---- RAG pattern ----
-retriever = vectorstore.as_retriever()
-rag_chain = {"context": retriever, "question": Passthrough()} \\
-            | prompt | model | parser
-~~~
-
-~~~
-# ---- When to use what ----
-Simple, fixed process       -> plain LCEL chain
-Standard tool-use loop      -> AgentExecutor
-Complex/stateful/cyclic     -> LangGraph (next skill!)
-~~~
-
-~~~
-# ---- Non-negotiables ----
-Integrate LangSmith tracing from day one (avoid black-box debugging)
-Apply Agent Fundamentals safety: bounded iterations, autonomy calibration
-Treat tool results as UNTRUSTED input (prompt injection risk)
+# ── Observability ──────────────────────────────────────
+import os
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_PROJECT"] = "my-project"
 ~~~
 `,
 
   "flash-cards": `
 | Question | Answer |
 |----------|--------|
-| What is LangChain? | A framework of reusable abstractions (chains, agents, tools, memory, retrievers) for LLM apps. |
-| What is LCEL? | LangChain Expression Language — a pipe-based, declarative syntax for composing chains. |
-| What does LangChain's AgentExecutor implement? | The plan-act-observe loop covered conceptually in Agent Fundamentals. |
-| When should you use LangGraph instead? | When a workflow needs complex branching, cycles, or explicit state control. |
-| Why is LangChain sometimes called a "black box"? | Higher-level abstractions can obscure the actual prompt/execution — mitigate with LangSmith. |
-| Simple chain vs. agent — when to use which? | Chain for fixed processes; agent for dynamic, input-dependent tool selection. |
-| What connects LangChain retrievers to Vector Search? | Retrievers wrap a vector database's ANN search for RAG pipelines. |
-| Why always set max_iterations on an agent? | Direct application of Agent Fundamentals' loop-safety guidance. |
-| Why treat tool results as untrusted? | Prompt injection risk — malicious content could manipulate agent behavior. |
-| What is LangSmith? | LangChain's companion observability/tracing/evaluation platform. |
+| What is LCEL? | LangChain Expression Language — the pipe-based ("|") syntax for composing Runnables (prompts, models, parsers, retrievers) with uniform invoke/batch/stream support |
+| What is a Runnable? | The shared interface every LCEL component implements, enabling uniform composition and execution modes |
+| What does **with_structured_output** do? | Binds a schema to the model's native structured-output/tool-calling API for reliable typed output, instead of text-based JSON parsing |
+| What replaced the older **Chain** subclassing pattern? | LCEL composition via the pipe operator |
+| What is **AgentExecutor**? | LangChain's original fixed reasoning-and-acting loop for tool-calling agents |
+| When should you escalate to LangGraph? | When agent control flow needs branching, cycles, retries, or human-in-the-loop steps |
+| What does a retriever return? | Relevant documents for a given query string, typically from a vector store |
+| What is LangSmith used for? | Tracing, evaluation, and monitoring of LangChain (and other) LLM applications |
+| Why pin LangChain package versions? | The framework has a documented history of renamed/deprecated APIs across versions; unpinned upgrades can silently break behavior |
+| What is the biggest anti-pattern for a single stateless LLM call? | Wrapping it in a full chain instead of just calling the raw provider SDK directly |
+| What packages make up LangChain's current architecture? | langchain-core, langchain, langchain-community, and separately versioned provider-specific packages |
+| Why treat retrieved/tool content as untrusted? | It can carry prompt injection attempts; the model may follow instructions embedded in retrieved text or tool output |
+| What's the risk of unbounded conversational memory? | It eventually exceeds the context window and inflates token cost linearly with conversation length |
+| What's the fastest way to debug a wrong chain answer? | Inspect the LangSmith trace or verbose logs to see the literal prompt and retrieved/tool content before touching the prompt |
+| Name three sibling frameworks with different core focuses. | LlamaIndex (data/RAG-first), PydanticAI (typed/minimal), DSPy (programmatic prompt optimization) |
 `,
 
   mcqs: `
-1. What is LCEL?
-   A) A vector database  B) LangChain Expression Language — a pipe-based syntax for composing chains  C) A model fine-tuning technique  D) A prompt injection attack
-   **Answer: B** — the declarative composition syntax underlying LangChain's chain abstraction.
+**1. What is the main purpose of the LCEL pipe ("|") operator?**
+A) To run steps in parallel automatically
+B) To compose Runnables into a single object with uniform invoke/batch/stream support
+C) To register a tool with an agent
+D) To connect to a vector store
 
-2. What does LangChain's AgentExecutor concretely implement?
-   A) A vector index  B) The plan-act-observe agent loop covered conceptually in Agent Fundamentals  C) A database migration tool  D) A caching layer
-   **Answer: B** — directly the concrete implementation of the agent loop concept.
+*Answer: B — the pipe composes components implementing the shared Runnable interface, which is what gives the composed chain streaming/batch/async support uniformly.*
 
-3. When should a team consider migrating from LangChain's AgentExecutor to LangGraph?
-   A) Never, LangGraph replaces LangChain entirely  B) When a workflow genuinely requires complex conditional branching, cycles, or explicit state management  C) Only for very simple tasks  D) When retrieval isn't needed
-   **Answer: B** — LangGraph addresses genuinely complex, stateful workflows LangChain's higher-level abstractions handle less comfortably.
+**2. Why is with_structured_output generally preferred over a text-based JSON output parser?**
+A) It's faster in all cases
+B) It uses the model provider's native schema-constrained generation, which is more reliable than hoping free text parses as JSON
+C) It doesn't require a Pydantic model
+D) It works with every model regardless of provider support
 
-4. Why is LangChain sometimes criticized as a "black box"?
-   A) It's closed-source  B) Higher-level abstractions can obscure exactly what prompt is sent and how steps execute, complicating debugging  C) It doesn't support Python  D) It has no tool integrations
-   **Answer: B** — mitigated by integrating LangSmith or equivalent tracing from the start.
+*Answer: B — native structured output constrains generation at the API level rather than relying on post-hoc text parsing.*
 
-5. When should a simple LCEL chain be preferred over a full agent?
-   A) Never — always use an agent  B) When the task follows a fixed, well-defined process not genuinely requiring dynamic tool selection  C) Only for retrieval tasks  D) Simple chains can't call tools
-   **Answer: B** — simpler, faster, cheaper, more predictable when dynamic decision-making isn't genuinely needed.
+**3. When should you migrate agent logic from AgentExecutor to LangGraph?**
+A) Never, AgentExecutor should always be preferred
+B) Only when using a different LLM provider
+C) When control flow needs branching, cycles, retries, or human-in-the-loop steps
+D) Only for JavaScript/TypeScript projects
+
+*Answer: C — LangGraph exists specifically to handle control flow that a simple fixed loop handles awkwardly.*
+
+**4. What is the biggest legitimate criticism of using LangChain for a single, one-off LLM call?**
+A) It cannot make single calls at all
+B) It's slower than every alternative at the network level
+C) It adds abstraction layers and a versioning dependency for no compositional benefit
+D) It requires a paid license
+
+*Answer: C — for a genuinely simple, non-composed task, a raw SDK call is clearer with fewer moving parts.*
+
+**5. Why should retrieved documents and tool outputs be treated as untrusted input in a prompt?**
+A) They are always factually incorrect
+B) They can carry prompt injection attempts that try to override system instructions
+C) LangChain automatically encrypts them, so this is a non-issue
+D) They are never included in the prompt anyway
+
+*Answer: B — any content from outside your own trusted system prompt is a real prompt-injection surface.*
+
+**6. What is the primary reason to pin exact LangChain package versions in production?**
+A) Licensing requirements
+B) Newer versions are always slower
+C) The framework has a documented history of renamed/deprecated APIs across versions, so unpinned upgrades can silently break behavior
+D) Pinning is required for LangSmith to function
+
+*Answer: C — version churn is real and documented; unpinned dependencies are a realistic production risk.*
 `,
 
   "revision-notes": `
-LangChain is the most widely-adopted open-source framework for building LLM-powered applications, providing reusable, composable abstractions directly implementing the concepts covered in **Agent Fundamentals**: CHAINS (composed sequences of LLM calls and transformations), LCEL (LangChain Expression Language — a declarative, pipe-based syntax for composing prompt templates, model calls, and output parsers), AGENTS (a concrete implementation of the plan-act-observe loop), TOOLS (structured, standardized tool-calling interfaces), MEMORY (conversation state management), and RETRIEVERS (directly connecting to the **Vector Search** skill for RAG applications).
+LangChain is a composition and integration framework for LLM applications, built around LCEL's pipe-based Runnable composition: prompt templates, chat models, output parsers, and retrievers all implement the same interface, so a chain built from them automatically supports invoke, batch, stream, and their async equivalents. It rose to prominence at the exact moment ChatGPT-driven interest in LLM applications exploded in late 2022/early 2023, largely because it named and packaged patterns (chains, agents, memory, tools) that every team was otherwise reinventing independently, backed by a very large library of provider, vector-store, and data-source integrations.
 
-LangChain exists because building an LLM application from scratch involves substantial, genuinely repetitive plumbing — prompt construction, output parsing, memory management, retrieval integration, and agent-loop implementation — much of which is common across many applications rather than unique to any single one; LangChain standardizes this plumbing into reusable abstractions plus a large ecosystem of pre-built integrations.
+The framework's core value is integration breadth and a shared vocabulary, not any single deeply novel technical idea — which is also the source of its most legitimate criticism: real abstraction overhead for simple tasks, and a documented, recurring history of API churn (chain classes deprecated in favor of LCEL, memory classes reworked, package splits into langchain-core/langchain/langchain-community) that any team adopting it must budget for as an ongoing cost, not a one-time learning curve.
 
-A critical, frequently-tested architectural decision is CHOOSING THE RIGHT ABSTRACTION LEVEL: a simple, linear LCEL chain for well-defined, fixed-process tasks not genuinely requiring dynamic tool selection; LangChain's AgentExecutor for standard plan-act-observe tool-use loops; and LangGraph (the platform's next skill) for genuinely complex, stateful, or cyclic workflows requiring explicit state management and conditional branching beyond what AgentExecutor comfortably expresses — LangChain's own team increasingly recommends this migration path as workflow complexity grows.
+For agents specifically, LangChain's own trajectory has been to keep the simple **AgentExecutor** loop for basic tool-calling cases while pushing complex, branching, or stateful agent control flow toward LangGraph, its lower-level sibling project — and to lean on LangSmith as the default tracing/evaluation layer for both. Structured output has converged on binding schemas to native provider tool-calling/schema-constrained generation (**with_structured_output**) rather than text-based JSON parsing, reflecting the industry's broader shift toward first-class structured-output APIs.
 
-A genuinely important, frequently-cited criticism is LangChain's "BLACK BOX" risk — its higher-level abstractions can obscure exactly what prompt is being sent to the model and how a chain's steps actually execute, directly complicating debugging; senior engineers mitigate this by integrating LANGSMITH (LangChain's companion observability platform, covered in its own skill) from the START of development, not as an afterthought.
-
-Since LangChain concretely implements the agent loop, it directly INHERITS every safety practice covered in **Agent Fundamentals**: bounded MAX ITERATION counts (a non-negotiable safety net), deliberate AUTONOMY-LEVEL calibration, and human-in-the-loop checkpoints for high-risk tool calls — these are not optional extras but direct carryovers from the foundational agent concepts this page builds on.
-
-RAG (retrieval-augmented generation) is a core, extremely common LangChain application pattern, composing a RETRIEVER (backed by a vector database, connecting to the **Vector Search** and vector database skills) with a prompt template and model call — a direct, practical mitigation for the **Hallucination** skill's own concerns, though retriever QUALITY (are the retrieved documents genuinely relevant) is a distinct, independently-measurable and independently-improvable concern from the surrounding chain's prompting/parsing logic.
-
-Tool results and retrieved documents should be treated as fundamentally UNTRUSTED input, directly connecting to the **Guardrails**, **OWASP Top 10**, and the platform's later **Prompt Injection Defense** skills — a malicious or manipulated tool result could itself attempt to manipulate the agent's subsequent behavior.
-
-A senior AI engineer chooses the right abstraction level deliberately (chain vs. agent vs. LangGraph), integrates LangSmith tracing from the start, applies Agent Fundamentals' safety practices to any agent-based application, and treats tool results as untrusted input — this foundational understanding directly sets up **LangGraph**, **CrewAI**, and the remaining, increasingly specialized framework and capability skills covered throughout the rest of this category.
+The honest, durable engineering judgment this page tries to instill is: LangChain earns its cost when an application has genuine multi-step composition, swappable providers, or reusable structure across many call sites; it is unnecessary complexity for a single stateless call, where a raw provider SDK call is clearer, has fewer dependencies, and is easier to debug. Making that call deliberately — rather than defaulting to either "always use a framework" or "never use one" — is the actual senior skill this page is trying to teach, more than any specific class name or method signature, all of which should be verified against current docs rather than memorized from any single snapshot, including this one.
 `,
 
   "learning-roadmap": `
-**Week 1 — LCEL fundamentals**: composing simple chains (prompt, model, parser) using the pipe syntax. Milestone: complete Lab 1, with a working, tested LCEL chain.
+**Week 1 — Foundations**: Learn prompt templates, LCEL composition (the pipe operator), and output parsers, including the preference for **with_structured_output** over text-based JSON parsing. Milestone: build a simple classification or Q&A chain end to end with an explicit timeout and retry policy.
 
-**Week 2 — Retrieval integration**: building a full RAG application integrating a vector database. Milestone: complete Lab 2, with a working RAG chain and verified retrieval relevance.
+**Week 2 — Retrieval and memory**: Build a RAG chain composing a retriever with a prompt and model, and add externalized conversational memory with a windowing or summarization strategy. Milestone: a chain that answers questions with source citations and correctly maintains multi-turn context without unbounded growth.
 
-**Week 3 — Agents and observability**: building a tool-calling agent with bounded iterations and full tracing. Milestone: complete Lab 3, with a documented, observable execution trace.
+**Week 3 — Tools and agents**: Build a tool-calling agent with 2-3 tools, add resilience (retries, fallback models), and deliberately identify a point where the control flow would benefit from LangGraph instead of **AgentExecutor**. Milestone: an agent that handles a tool failure gracefully and has a documented rationale for its chosen control-flow pattern.
 
-**Week 4 — Abstraction-level judgment**: comparing a complex chain/agent implementation against LangGraph's approach. Milestone: complete Lab 4, with a documented comparison.
+**Week 4 — Production hardening**: Enable LangSmith tracing, build a frozen evaluation dataset, write regression tests against fake/deterministic models, and produce a deployment configuration (Dockerfile, secrets handling, version pinning) following the production checklist. Milestone: a small, fully observable, tested LangChain application you could hand to another engineer with confidence.
 
-Next platform skill once this roadmap is complete: **LangGraph**, addressing LangChain's own limitations for genuinely complex, stateful agentic workflows.
+Next platform skill: once you're comfortable with LangChain's composition and simple agent patterns, move to **LangGraph** for stateful, branching agent orchestration, and to **LangSmith** for the deeper evaluation and observability discipline that production LLM applications need regardless of which framework built them.
 `,
 
   "official-docs": `
-- **LangChain's official Python and JavaScript/TypeScript documentation** — the authoritative, actively-maintained reference for chains, agents, tools, memory, and integrations.
-- **LangSmith's official documentation** — the companion observability/evaluation platform's reference.
+- **LangChain Python documentation** (python.langchain.com) — the primary reference; check the version selector, since behavior and class names have changed materially across releases.
+- **LangChain JS/TS documentation** (js.langchain.com) — the parallel JavaScript/TypeScript API, broadly similar in concept but not identical in every detail to the Python docs.
+- **LangChain GitHub repository** (github.com/langchain-ai/langchain) — the changelog and release notes are the most reliable source for exactly what changed between versions, more reliable than any third-party tutorial.
+- **LangGraph documentation** — the sibling project's docs, essential once you outgrow simple chains/AgentExecutor.
+- **LangSmith documentation** — tracing, evaluation, and monitoring setup guides.
 `,
 
   books: `
-- **"Generative AI with LangChain" — Ben Auffarth** — a focused, practical treatment of building LLM applications with LangChain.
-- **"Building LLM Applications" (emerging technical references)** — broader coverage of LLM application architecture, including framework-specific guidance.
+- **"Generative AI with LangChain" by Ben Auffarth** — one of the few full-length books specifically on LangChain; useful for a structured walkthrough, though given the framework's churn, treat specific code listings as illustrative rather than exact-syntax-guaranteed by the time you read it.
+- **"Prompt Engineering for Generative AI" by James Phoenix and Mike Taylor** — broader than LangChain specifically, but covers prompt template and chain-composition thinking that transfers directly.
+- **"Designing Machine Learning Systems" by Chip Huyen** — not LangChain-specific, but essential for the production-systems thinking (monitoring, testing, deployment discipline) this page repeatedly applies to LangChain applications.
+- **"Building LLM Powered Applications" by Valentina Alto** — covers LangChain among other frameworks/approaches, useful for the comparative perspective emphasized in this page's Comparisons section.
 `,
 
   blogs: `
-- **LangChain's official blog** — practical guidance, release notes, and architecture discussions directly from the maintaining team.
-- **Community tutorials and case studies** on building production LangChain applications, widely available across AI engineering educational content providers.
+- **The official LangChain blog** (blog.langchain.dev) — the highest-signal source for what the maintainers themselves consider the current recommended patterns, including migration guidance across major refactors.
+- **LangSmith and LangGraph release notes/blogs** — track these alongside the main LangChain blog, since the three projects' roadmaps are tightly coupled.
+- **Individual practitioner write-ups on migrating from AgentExecutor to LangGraph** — searchable on engineering blogs and Hacker News; genuinely useful for the "when did we actually need to escalate" judgment call this page emphasizes, more useful than official docs for that specific decision.
+- **Company engineering blogs describing real production LLM systems** (search for "[company] LLM production" write-ups) — valuable for grounding the Comparisons and Case Studies sections in real, dated experience rather than marketing claims.
 `,
 
   "research-papers": `
-- **Yao, S. et al. — "ReAct: Synergizing Reasoning and Acting in Language Models"** — the foundational pattern LangChain's agent abstractions concretely implement, covered in depth in **Agent Fundamentals**.
-- LangChain itself is primarily an engineering framework rather than a research contribution — its own documentation and design-decision blog posts serve as the closest equivalent to a primary source.
+LangChain itself is an engineering framework, not the subject of a foundational research paper, so this section is thinner than it would be for a genuinely research-driven topic — an honest acknowledgment rather than an invented citation. The closest foundational reading is the research underlying the patterns LangChain implements:
+
+- **"ReAct: Synergizing Reasoning and Acting in Language Models"** (Yao et al., 2022) — the reasoning-and-acting loop pattern that LangChain's original agent design was built around.
+- **"Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"** (Lewis et al., 2020) — the foundational RAG paper underlying the retriever-plus-generation pattern LangChain's RAG chains implement; see the dedicated **RAG** skill for deeper treatment.
+- **"Toolformer: Language Models Can Teach Themselves to Use Tools"** (Schick et al., 2023) — foundational thinking on models learning when and how to invoke external tools, conceptually underlying tool-calling agent design; see the **Tool Calling** skill.
+
+For LangChain-specific architectural decisions (LCEL, the langchain-core/langchain/langchain-community split), the primary source is the project's own blog posts and release notes rather than academic papers — treat those as engineering documentation, not peer-reviewed research.
 `,
 
   videos: `
-- **LangChain's official YouTube channel** — tutorials, release announcements, and conference talks directly from the maintaining team.
-- **Community-produced tutorials on building LCEL chains, agents, and RAG applications** from various AI engineering educational content providers.
+- **Harrison Chase's talks and interviews** (searchable on YouTube and podcast platforms) — the creator's own explanations of LangChain's design decisions and the reasoning behind major refactors like LCEL and LangGraph.
+- **LangChain's own YouTube channel** — official tutorials and webinars, generally the most up-to-date source for current API patterns given how much has changed across versions.
+- **Conference talks on production LLM application architecture** (AI Engineer Summit and similar events have had multiple LangChain/LangGraph-focused talks) — useful for the production-hardening and agent-architecture judgment calls this page emphasizes.
+- **Comparative walkthroughs of LangChain vs. raw SDK vs. LlamaIndex vs. PydanticAI** on independent developer YouTube channels — useful for grounding the Comparisons section in demonstrated code rather than marketing claims, though verify claims against your own testing given how quickly this space changes.
 `,
 
   "github-repos": `
-- **langchain-ai/langchain** — the official, primary LangChain repository.
-- **langchain-ai/langsmith-sdk** — the companion observability platform's SDK.
+- **langchain-ai/langchain** — the main repository; check open issues and the changelog for the most current, ground-truth view of what's stable versus in flux.
+- **langchain-ai/langgraph** — the sibling orchestration project, essential once your agent control flow outgrows simple chains.
+- **langchain-ai/langsmith-sdk** — the SDK for the tracing/evaluation platform.
+- **langchain-ai/langchain-community** — the large collection of third-party integrations; useful to browse for "does an integration already exist for X" before writing one yourself.
+- Community example repositories tagged "langchain-examples" or similar on GitHub — useful for seeing real, runnable code, but cross-check the LangChain version pinned in their lockfiles before assuming the syntax is current.
+- **Awesome-LangChain**-style curated lists — a reasonable starting point for discovering integrations and example projects, though quality and currency vary; verify anything non-trivial against the official docs.
 `,
 
   "practice-problems": `
-Ordered by skill focus:
+1. Build an LCEL chain that classifies customer feedback into sentiment categories using **with_structured_output**, then extend it to batch-process a CSV of 1,000 reviews with tuned concurrency.
+2. Build a RAG chain over a small set of PDFs (using a document loader plus a vector store) that answers questions with source citations, then write an automated evaluation script measuring whether citations match the actual retrieved documents.
+3. Build a tool-calling agent with at least three tools, deliberately introduce a failure in one tool (raise an exception), and implement graceful degradation so the agent reports the failure to the user rather than crashing.
+4. Take an existing simple **AgentExecutor**-based agent and identify a concrete requirement (an approval step, a retry-with-different-strategy branch) that would justify migrating it to LangGraph; sketch (or implement) the LangGraph version and compare the resulting code's clarity.
+5. Instrument a chain with LangSmith tracing, intentionally introduce a bug (a wrong prompt variable, a misconfigured retriever), and practice diagnosing it purely from the trace rather than reading the source code first.
+6. External practice: explore LangChain's own official tutorial notebooks/cookbook examples and rebuild one from scratch without copying the code, using only the documentation, to test your grasp of the underlying concepts rather than memorized syntax.
 
-1. **LCEL composition**: given a described multi-step task, compose an appropriate chain using the pipe syntax.
-2. **Tool description writing**: given a set of ambiguous tool descriptions, rewrite them for clearer, more reliable model-driven selection.
-3. **Abstraction-level selection**: given a described workflow, decide whether a simple chain, an agent, or LangGraph is most appropriate, and justify the choice.
-4. **RAG retriever debugging**: given a described retrieval-relevance issue, diagnose the likely root cause and propose a fix.
-5. **External practice sets**: LangChain's own official tutorials and cookbook examples for hands-on practice across chains, agents, and RAG.
+External sets: the official LangChain documentation's own tutorial and how-to guide sections (regularly updated) are the best source of additional, current practice material given how quickly the framework's exact API surface moves.
 `,
 
   "architecture-diagram": `
 ~~~mermaid
 flowchart TB
-    subgraph Composition["LCEL Composition"]
-        Prompt["Prompt Template"]
-        Model["LLM Call"]
-        Parser["Output Parser"]
+    subgraph Client["Client"]
+        UI["Web/mobile UI"]
     end
-    subgraph Retrieval["RAG"]
-        Retriever["Retriever"]
-        VectorDB["Vector Database"]
+    subgraph Service["LangChain-based service"]
+        API["API layer (FastAPI/etc.)"]
+        Chains["LCEL chains\n(prompt + model + parser)"]
+        Agents["Agent loop\n(AgentExecutor or LangGraph)"]
+        Tools["Tools (typed functions)"]
+        Mem["Session-keyed message history\n(Redis/DB)"]
     end
-    subgraph AgentLayer["Agent Layer"]
-        Executor["AgentExecutor"]
-        Tools["Registered Tools"]
+    subgraph Data["Data layer"]
+        VS[("Vector store")]
+        DB[("Application database")]
     end
-    subgraph Observability["Observability"]
-        LangSmith["LangSmith Tracing"]
+    subgraph External["External services"]
+        LLM["LLM provider API"]
+        LS["LangSmith\n(tracing & evaluation)"]
     end
-    Prompt --> Model --> Parser
-    Retriever --> VectorDB
-    Retriever --> Prompt
-    Executor --> Tools
-    Executor --> Model
-    Composition --> Observability
-    AgentLayer --> Observability
+
+    UI --> API
+    API --> Chains
+    API --> Agents
+    Agents --> Tools
+    Chains --> Mem
+    Agents --> Mem
+    Chains --> VS
+    Agents --> DB
+    Chains --> LLM
+    Agents --> LLM
+    Chains -.traces.-> LS
+    Agents -.traces.-> LS
 ~~~
 `,
 
   "mind-map": `
-~~~mindmap
+~~~mermaid
+mindmap
   root((LangChain))
-    Foundations
-      Overview
-      History LCEL LangGraph LangSmith
-      Why it exists
-      Problem it solves
-    Core Abstractions
-      Chains
-      LCEL pipe syntax
-      Agents AgentExecutor
-      Tools
-      Memory
+    Core primitives
+      Prompt templates
+      Chat models
+      Output parsers
+      Runnable interface
+    LCEL
+      Pipe composition
+      invoke/batch/stream
+      RunnableParallel
+      RunnableLambda
+    Retrieval
       Retrievers
-    RAG Pattern
-      Retriever plus vector DB
-      Prompt augmentation
-      Hallucination mitigation
-    Agent Safety
-      Bounded iterations
-      Autonomy calibration
-      Human in the loop
-    Observability
-      LangSmith tracing
-      Black box risk
-      Debugging traces
-    Abstraction Choice
-      Simple chain
+      RAG chains
+      Vector store integration
+    Memory
+      Message history
+      Windowing/summarization
+      Externalized session stores
+    Agents and tools
+      bind_tools
       AgentExecutor
-      LangGraph for complexity
-    Practice
-      Interview questions
-      Coding problems
-      Hands-on labs
-      Real projects
+      Tool docstrings
+      Escalation to LangGraph
+    Production concerns
+      Timeouts and retries
+      Fallback models
+      Version pinning
+      Security: prompt injection, tool safety
+    Ecosystem
+      LangGraph
+      LangSmith
+      LlamaIndex
+      PydanticAI
+      DSPy
+    Honest tradeoffs
+      Version churn
+      Abstraction overhead
+      When raw SDK is simpler
 ~~~
 `,
 };
