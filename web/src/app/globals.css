@@ -209,9 +209,13 @@ body {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.6;
-  -webkit-mask-image: radial-gradient(circle at 50% 32%, black 0%, transparent 70%);
-  mask-image: radial-gradient(circle at 50% 32%, black 0%, transparent 70%);
+  /* Fading is handled mostly by the scene's own material opacity (see
+     HeroScene's "ambient" variant); this CSS opacity is a light secondary
+     trim, not the primary dimming layer — stacking two aggressive layers
+     made the effect nearly invisible before, and one alone was too loud. */
+  opacity: 0.85;
+  -webkit-mask-image: radial-gradient(circle at 50% 28%, black 0%, transparent 62%);
+  mask-image: radial-gradient(circle at 50% 28%, black 0%, transparent 62%);
 }
 .ambient-canvas canvas {
   display: block;
