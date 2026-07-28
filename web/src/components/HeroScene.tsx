@@ -176,7 +176,7 @@ function Scene({
   // for pages that don't have a dedicated hero to hide behind.
   const position: [number, number, number] = variant === "hero" ? [3.05, 0, 0] : [0, 0, 0];
   const scale = variant === "hero" ? 0.95 : 1.35;
-  const opacity = variant === "hero" ? 1 : 0.35;
+  const opacity = variant === "hero" ? 1 : 0.4;
   return (
     <group position={position} scale={scale}>
       <ParallaxRig animate={animate && variant === "hero"}>
