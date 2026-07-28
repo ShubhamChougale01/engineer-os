@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { Bookmark } from "lucide-react";
-import type { Skill } from "@/data/catalog";
+import { CATEGORY_BY_ID, type Skill } from "@/data/catalog";
 import { TEMPLATE } from "@/data/template";
 import { useBookmarks, useProgress } from "@/lib/storage";
+import { SkillIcon } from "./SkillIcon";
 import { StatusBadge } from "./StatusBadge";
 
 export function SkillCard({ skill, index = 0 }: { skill: Skill; index?: number }) {
@@ -27,8 +28,13 @@ export function SkillCard({ skill, index = 0 }: { skill: Skill; index?: number }
       <div className="mb-1 flex items-start justify-between gap-2">
         <Link
           href={`/skills/${skill.slug}`}
-          className="font-medium after:absolute after:inset-0 transition-colors group-hover:text-accent"
+          className="flex items-center gap-2 font-medium after:absolute after:inset-0 transition-colors group-hover:text-accent"
         >
+          <SkillIcon
+            icon={skill.icon}
+            fallback={CATEGORY_BY_ID[skill.categoryId]?.emoji ?? ""}
+            className="h-4 w-4 shrink-0 text-ink-muted"
+          />
           {skill.name}
         </Link>
         <button
