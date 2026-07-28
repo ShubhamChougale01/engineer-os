@@ -7,6 +7,7 @@ import { TEMPLATE } from "@/data/template";
 import { useBookmarks, useLastVisited, useProgress } from "@/lib/storage";
 import { useEnabledSkills } from "@/lib/settings";
 import { SkillCard } from "@/components/SkillCard";
+import { HeroCanvas } from "@/components/HeroCanvas";
 
 export default function Dashboard() {
   const { progress } = useProgress();
@@ -32,24 +33,58 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-10">
-      <section>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Everything you need to become a Senior AI Engineer.
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm text-ink-muted">
-          {SKILLS.length} skills across {CATEGORIES.length} categories — each one a complete{" "}
-          {TEMPLATE.length}-section knowledge page from fundamentals to production and interviews.
-        </p>
-      </section>
-
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {stats.map(({ icon: Icon, label, value }) => (
-          <div key={label} className="rounded-xl border border-line bg-surface-raised p-4">
-            <Icon size={16} className="mb-2 text-accent" />
-            <div className="text-2xl font-semibold tabular-nums">{value}</div>
-            <div className="text-xs text-ink-muted">{label}</div>
+      <section className="relative overflow-hidden rounded-[2.5rem] border border-line bg-surface-raised/90 p-8 shadow-[var(--shadow-lg)] hero-3d">
+        <div className="hero-blob one" aria-hidden="true" />
+        <div className="hero-blob two" aria-hidden="true" />
+        <div className="hero-blob three" aria-hidden="true" />
+        <HeroCanvas />
+        <div className="relative z-10 grid gap-12 lg:grid-cols-[1.45fr_1fr]">
+          <div className="space-y-8">
+            <span
+              className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-accent animate-in fade-in duration-500"
+              style={{ animationDelay: "0.1s", animationFillMode: "both" }}
+            >
+              AI engineer curriculum
+            </span>
+            <h1
+              className="text-5xl font-bold tracking-tight text-ink sm:text-6xl lg:text-6xl leading-[1.1]"
+              style={{
+                animation: "reveal-up 0.7s cubic-bezier(0.22,1,0.36,1) 0.2s both",
+              }}
+            >
+              Everything you need to become a Senior AI Engineer.
+            </h1>
+            <p
+              className="max-w-2xl text-base leading-8 text-ink-muted font-light"
+              style={{
+                animation: "reveal-up 0.7s cubic-bezier(0.22,1,0.36,1) 0.4s both",
+              }}
+            >
+              {SKILLS.length} skills across {CATEGORIES.length} categories — each one a complete {TEMPLATE.length}-section knowledge page from fundamentals to production and interviews.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="surface-3d surface-3d-glass rounded-3xl p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-ink-faint">Built for mastery</p>
+                <p className="mt-2 text-lg font-semibold text-ink">Practical guides, diagrams, and production-ready examples.</p>
+              </div>
+              <div className="surface-3d surface-3d-glass rounded-3xl p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-ink-faint">Interactive path</p>
+                <p className="mt-2 text-lg font-semibold text-ink">Track progress, save bookmarks, and discover career-ready skills.</p>
+              </div>
+            </div>
           </div>
-        ))}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {stats.map(({ icon: Icon, label, value }) => (
+              <div key={label} className="surface-3d surface-3d-glass surface-3d-hover rounded-3xl p-4">
+                <span className="tile-3d mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl text-white">
+                  <Icon size={18} />
+                </span>
+                <div className="text-3xl font-semibold tabular-nums">{value}</div>
+                <div className="text-xs text-ink-muted">{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {continueLearning.length > 0 && (
@@ -95,14 +130,16 @@ export default function Dashboard() {
               <Link
                 key={c.id}
                 href={`/skills?category=${c.id}`}
-                className="group rounded-xl border border-line bg-surface-raised p-4 transition-colors hover:border-accent/50"
+                className="surface-3d surface-3d-hover group rounded-2xl p-4"
               >
                 <div className="mb-1 flex items-center gap-2">
-                  <span>{c.emoji}</span>
+                  <span className="tile-3d flex h-7 w-7 items-center justify-center rounded-lg text-sm">
+                    {c.emoji}
+                  </span>
                   <span className="font-medium">{c.name}</span>
                   <ArrowRight
                     size={14}
-                    className="ml-auto text-ink-faint transition-transform group-hover:translate-x-0.5"
+                    className="ml-auto text-ink-faint transition-transform group-hover:translate-x-0.5 group-hover:text-accent"
                   />
                 </div>
                 <p className="line-clamp-1 text-xs text-ink-muted">{c.description}</p>

@@ -11,6 +11,16 @@
   --accent: 124 58 237;
   --accent-soft: 237 233 254;
   --line: 228 228 231;
+
+  /* 3D depth tokens */
+  --shadow-rgb: 23 23 23;
+  --hi-rgb: 255 255 255;
+  --shadow-sm: 0 1px 1px rgb(var(--shadow-rgb) / 0.04), 0 3px 8px -3px rgb(var(--shadow-rgb) / 0.10);
+  --shadow-md: 0 1px 1px rgb(var(--shadow-rgb) / 0.04), 0 10px 20px -8px rgb(var(--shadow-rgb) / 0.16),
+    0 24px 40px -24px rgb(var(--shadow-rgb) / 0.20);
+  --shadow-lg: 0 2px 2px rgb(var(--shadow-rgb) / 0.05), 0 16px 32px -12px rgb(var(--shadow-rgb) / 0.22),
+    0 32px 64px -28px rgb(var(--shadow-rgb) / 0.28);
+  --shadow-inset: inset 0 1px 3px rgb(var(--shadow-rgb) / 0.14), inset 0 1px 0 rgb(var(--shadow-rgb) / 0.04);
 }
 
 .dark {
@@ -22,6 +32,44 @@
   --accent: 167 139 250;
   --accent-soft: 46 16 101;
   --line: 39 39 42;
+
+  --shadow-rgb: 0 0 0;
+  --hi-rgb: 255 255 255;
+  --shadow-sm: 0 1px 0 rgb(0 0 0 / 0.4), 0 4px 10px -3px rgb(var(--shadow-rgb) / 0.5);
+  --shadow-md: 0 1px 0 rgb(0 0 0 / 0.4), 0 12px 24px -8px rgb(var(--shadow-rgb) / 0.6),
+    0 28px 48px -24px rgb(var(--shadow-rgb) / 0.7);
+  --shadow-lg: 0 2px 0 rgb(0 0 0 / 0.4), 0 20px 40px -12px rgb(var(--shadow-rgb) / 0.7),
+    0 40px 80px -28px rgb(var(--shadow-rgb) / 0.8);
+  --shadow-inset: inset 0 2px 4px rgb(var(--shadow-rgb) / 0.5), inset 0 1px 0 rgb(0 0 0 / 0.3);
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes reveal-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes magnetic-x {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(2px);
+  }
 }
 
 html {
@@ -31,6 +79,206 @@ html {
 
 body {
   @apply bg-surface text-ink antialiased;
+  min-height: 100vh;
+  background-color: rgb(9 9 11);
+  background-image:
+    radial-gradient(circle at 14% 10%, rgb(var(--accent) / 0.24), transparent 30%),
+    radial-gradient(circle at 84% 8%, rgb(var(--accent) / 0.16), transparent 25%),
+    radial-gradient(circle at 50% 84%, rgb(var(--accent) / 0.08), transparent 26%),
+    radial-gradient(circle at 22% 63%, rgb(var(--ink) / 0.04), transparent 22%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+@keyframes float-blob {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.hero-3d {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgb(var(--surface-raised) / 0.96), rgb(var(--surface-raised) / 0.78));
+  border: 1px solid rgb(var(--accent) / 0.18);
+  box-shadow: 0 28px 80px -32px rgb(var(--accent) / 0.35), var(--shadow-lg);
+  backdrop-filter: blur(18px);
+  transform-style: preserve-3d;
+}
+.hero-3d::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top left, rgb(var(--accent) / 0.2), transparent 28%),
+    radial-gradient(circle at top right, rgb(var(--accent) / 0.12), transparent 24%);
+  pointer-events: none;
+}
+.hero-3d::after {
+  content: "";
+  position: absolute;
+  left: -8%;
+  top: 30%;
+  width: 260px;
+  height: 260px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(var(--accent) / 0.18), transparent 58%);
+  filter: blur(64px);
+  z-index: 0;
+}
+/* WebGL hero layer: sits above the decorative blobs, below the copy (z-10). */
+.hero-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 1;
+}
+.hero-canvas canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+/* Scrim: keeps the headline column high-contrast while the scene stays visible
+   on the right, where only the stat tiles sit. */
+.hero-canvas::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgb(var(--surface-raised) / 0.95) 0%,
+    rgb(var(--surface-raised) / 0.92) 42%,
+    rgb(var(--surface-raised) / 0.6) 60%,
+    transparent 78%
+  );
+}
+@media (max-width: 1023px) {
+  /* Single-column layout stacks copy over the whole hero, so mute the scene. */
+  .hero-canvas {
+    opacity: 0.5;
+  }
+  .hero-canvas::after {
+    background: rgb(var(--surface-raised) / 0.72);
+  }
+}
+
+.hero-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(24px);
+  opacity: 0.45;
+  animation: float-blob 10s ease-in-out infinite;
+}
+.hero-blob.one {
+  top: 12%;
+  left: 6%;
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, rgb(var(--accent) / 0.32), transparent 60%);
+}
+.hero-blob.two {
+  bottom: 4%;
+  right: 10%;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgb(var(--accent) / 0.22), transparent 58%);
+}
+.hero-blob.three {
+  top: 50%;
+  right: 34%;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgb(var(--accent-soft) / 0.26), transparent 55%);
+}
+
+/* Must follow the .hero-blob rules above to win on equal specificity. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-blob {
+    animation: none;
+  }
+}
+
+/* ---------- 3D surface system ---------- */
+
+/* Raised card: soft ambient shadow + top highlight edge + subtle gloss sheen */
+.surface-3d {
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04)),
+    rgb(var(--surface-raised));
+  border: 1px solid rgb(var(--line) / 0.65);
+  box-shadow: 0 18px 45px -18px rgb(var(--shadow-rgb) / 0.24), 0 4px 12px -6px rgb(var(--shadow-rgb) / 0.18);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  transform: perspective(1200px) translateZ(0);
+  overflow: hidden;
+}
+.surface-3d::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 42%);
+}
+.surface-3d-hover:hover {
+  transform: perspective(1200px) translateY(-8px) rotateX(1.4deg) scale(1.01);
+  box-shadow: 0 28px 80px -20px rgb(var(--shadow-rgb) / 0.32), 0 10px 24px -10px rgb(var(--shadow-rgb) / 0.24);
+  border-color: rgb(var(--accent) / 0.5);
+}
+
+/* Frosted variant for panels layered over the WebGL hero: the scene stays
+   visible through them, while the blur keeps the text on top legible. */
+.surface-3d-glass {
+  background: linear-gradient(180deg, rgb(var(--hi-rgb) / 0.1), rgb(var(--hi-rgb) / 0.03)),
+    rgb(var(--surface-raised) / 0.55);
+  border-color: rgb(var(--accent) / 0.22);
+  backdrop-filter: blur(14px) saturate(1.15);
+}
+@supports not (backdrop-filter: blur(4px)) {
+  /* No blur available → fall back to an opaque panel rather than unreadable text. */
+  .surface-3d-glass {
+    background: rgb(var(--surface-raised));
+  }
+}
+
+/* Recessed / pressed surface — inputs, active nav pills, progress tracks */
+.surface-inset {
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--line));
+  box-shadow: var(--shadow-inset);
+}
+
+/* Gradient icon tile with colored glow + embossed highlight */
+.tile-3d {
+  background: linear-gradient(145deg, rgb(var(--accent) / 1), rgb(var(--accent) / 0.7));
+  box-shadow:
+    0 10px 24px -10px rgb(var(--accent) / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    inset 0 -3px 6px rgb(0 0 0 / 0.18);
+}
+
+/* 3D button: press-down feedback */
+.btn-3d {
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgb(var(--hi-rgb) / 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-3d:hover {
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgb(var(--hi-rgb) / 0.1);
+}
+.btn-3d:active {
+  transform: translateY(1px) scale(0.97);
+  box-shadow: var(--shadow-inset);
+}
+
+/* Recessed progress track + glowing gradient fill */
+.track-3d {
+  background: rgb(var(--surface));
+  box-shadow: var(--shadow-inset);
+}
+.fill-3d {
+  background: linear-gradient(90deg, rgb(var(--accent) / 0.75), rgb(var(--accent)));
+  box-shadow: 0 0 10px rgb(var(--accent) / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.3);
 }
 
 /* ---------- Markdown prose ---------- */
